@@ -3,7 +3,7 @@ import os
 from micro_sam.evaluation import get_predictor
 from micro_sam.evaluation.livecell import _get_livecell_paths
 
-DATA_ROOT = "/scratch/projects/nim00007/data/LiveCELL"
+DATA_ROOT = "/scratch/usr/nimcarot/data/LiveCELL"
 EXPERIMENT_ROOT = "/scratch/projects/nim00007/sam/experiments/livecell"
 PROMPT_FOLDER = "/scratch/projects/nim00007/sam/experiments/prompts/livecell"
 MODELS = {

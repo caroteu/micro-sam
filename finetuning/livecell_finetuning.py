@@ -37,7 +37,7 @@ def finetune_livecell(args):
 
     # training settings:
     model_type = args.model_type
-    checkpoint_path = None  # override this to start training from a custom checkpoint
+    checkpoint_path = args.checkpoint  # override this to start training from a custom checkpoint
     patch_shape = (520, 704)  # the patch shape for training
     n_objects_per_batch = 25  # this is the number of objects per batch that will be sampled
 
@@ -92,6 +92,10 @@ def main():
     parser.add_argument(
         "--input_path", "-i", default="/scratch/projects/nim00007/data/LiveCELL/",
         help="The filepath to the LiveCELL data. If the data does not exist yet it will be downloaded."
+    )
+    parser.add_argument(
+        "--checkpoint", "-c", default=None,
+        help="The path to the model chosen for fine-tuning."
     )
     parser.add_argument(
         "--model_type", "-m", default="vit_b",
