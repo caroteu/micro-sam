@@ -231,7 +231,7 @@ def _track_object_widget(
     shape = state.image_shape
 
     # we use the bounding box projection method as default which generally seems to work better for larger changes
-    # between frames (which is pretty tyipical for tracking compared to 3d segmentation)
+    # between frames (which is pretty tyipical for tracking compared to 3d segmentation ) FIXME: Description is wrong here? 
     projection_ = "mask" if projection == "default" else projection
 
     with progress(total=shape[0]) as progress_bar:
