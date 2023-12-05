@@ -82,6 +82,7 @@ def livecell_inference(
     n_negatives: Optional[int] = None,
     prompt_folder: Optional[Union[str, os.PathLike]] = None,
     predictor: Optional[SamPredictor] = None,
+    time_file: Optional[Union[str, os.PathLike]] = None
 ) -> None:
     """Run inference for livecell with a fixed prompt setting.
 
@@ -96,6 +97,7 @@ def livecell_inference(
         n_negatives: The number of negative point prompts.
         prompt_folder: The folder where the prompts should be saved.
         predictor: The segment anything predictor.
+        time_file: The file where the inference timing will be saved.
     """
     image_paths, gt_paths = _get_livecell_paths(input_folder)
     if predictor is None:
@@ -124,6 +126,10 @@ def livecell_inference(
         prompt_folder = os.path.join(experiment_folder, "prompts")
         os.makedirs(prompt_folder, exist_ok=True)
 
+    if time_file:
+        with open(time_file, 'a') as f:
+            f.write(setting_name + ',')
+
     inference.run_inference_with_prompts(
         predictor,
         image_paths,
@@ -135,6 +141,7 @@ def livecell_inference(
         use_boxes=use_boxes,
         n_positives=n_positives,
         n_negatives=n_negatives,
+        time_file=time_file
     )
 
 
@@ -196,6 +203,12 @@ def run_livecell_amg(
 
 def _run_multiple_prompt_settings(args, prompt_settings):
     predictor = inference.get_predictor(args.ckpt, args.model)
+
+    if args.timeit:
+        time_file = os.path.join(args.experiment_folder, 'time.csv')
+    else:
+        time_file = None
+        
     for settings in prompt_settings:
         livecell_inference(
             args.ckpt,
@@ -207,7 +220,8 @@ def _run_multiple_prompt_settings(args, prompt_settings):
             n_positives=settings["n_positives"],
             n_negatives=settings["n_negatives"],
             prompt_folder=args.prompt_folder,
-            predictor=predictor
+            predictor=predictor,
+            time_file=time_file
         )
 
 
@@ -224,6 +238,10 @@ def run_livecell_inference() -> None:
                         help="Provide the path where all data for the inference run will be stored.")
     parser.add_argument("-m", "--model", type=str, required=True,
                         help="Pass the checkpoint-specific model name being used for inference.")
+
+
+    #NOTE: The following is a preliminary idea on how to implement the timing of the inference
+    parser.add_argument("-t", "--timeit", action="store_true")
 
     # the experiment type:
     # - default settings (p1-n0, p2-n4, p4-n8, box)
@@ -255,11 +273,13 @@ def run_livecell_inference() -> None:
         prompt_settings = default_experiment_settings()
         _run_multiple_prompt_settings(args, prompt_settings)
     elif args.auto_mask_generation:
-        run_livecell_amg(args.ckpt, args.input, args.model, args.experiment_folder)
+        run_livecell_amg(args.ckpt, args.input, args.model, args.experiment_folder, args.timeit)
     else:
+        if args.timeit:
+            time_file = os.path.join(args.experiment_folder, 'time.csv')
         livecell_inference(
             args.ckpt, args.input, args.model, args.experiment_folder,
-            args.points, args.box, args.positive, args.negative, args.prompt_folder,
+            args.points, args.box, args.positive, args.negative, args.prompt_folder, time_file
         )
 
 

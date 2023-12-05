@@ -20,6 +20,7 @@ from ..inference import batched_inference
 from ..instance_segmentation import mask_data_to_segmentation
 from ..prompt_generators import PointAndBoxPromptGenerator, IterativePromptGenerator
 
+import time
 
 def _load_prompts(
     cached_point_prompts, save_point_prompts,
@@ -124,14 +125,20 @@ def _run_inference_with_prompts_for_image(
     if not use_boxes and (n_positives == 1 and n_negatives == 0):
         multimasking = True
 
+    start_inference_time = time.time()
+
     instance_labels = batched_inference(
         predictor, image, batch_size,
         boxes=boxes, points=points, point_labels=point_labels,
         multimasking=multimasking, embedding_path=embedding_path,
         return_instance_segmentation=True,
     )
+    
+    end_inference_time = time.time()
+    # calculate and return the time needed per segmentation
+    inference_time = (end_inference_time - start_inference_time)/batch_size
 
-    return instance_labels, prompts
+    return instance_labels, prompts, inference_time
 
 
 def get_predictor(
@@ -305,6 +312,7 @@ def run_inference_with_prompts(
     dilation: int = 5,
     prompt_save_dir: Optional[Union[str, os.PathLike]] = None,
     batch_size: int = 512,
+    time_file: Union[str, os.PathLike] = None
 ) -> None:
     """Run segment anything inference for multiple images using prompts derived from groundtruth.
 
@@ -313,6 +321,8 @@ def run_inference_with_prompts(
         image_paths: The image file paths.
         gt_paths: The ground-truth segmentation file paths.
         embedding_dir: The directory where the image embddings will be saved or are already saved.
+        prediction_dir: The directory where the predictions will be saved.
+        time_dir: The directory where the prediction time per instance will be saved.
         use_points: Whether to use point prompts.
         use_boxes: Whether to use box prompts
         n_positives: The number of positive point prompts that will be sampled.
@@ -335,6 +345,9 @@ def run_inference_with_prompts(
      )
 
     os.makedirs(prediction_dir, exist_ok=True)
+
+    inference_times = []
+
     for image_path, gt_path in tqdm(
         zip(image_paths, gt_paths), total=len(image_paths), desc="Run inference with prompts"
     ):
@@ -359,7 +372,7 @@ def run_inference_with_prompts(
             cached_box_prompts, save_box_prompts,
             label_name
         )
-        instances, this_prompts = _run_inference_with_prompts_for_image(
+        instances, this_prompts, inference_time = _run_inference_with_prompts_for_image(
             predictor, im, gt, n_positives=n_positives, n_negatives=n_negatives,
             dilation=dilation, use_points=use_points, use_boxes=use_boxes,
             batch_size=batch_size, cached_prompts=this_prompts,
@@ -370,6 +383,8 @@ def run_inference_with_prompts(
             cached_point_prompts[label_name] = this_prompts[:2]
         if save_box_prompts:
             cached_box_prompts[label_name] = this_prompts[-1]
+        
+        inference_times.append(inference_time)
 
         # It's important to compress here, otherwise the predictions would take up a lot of space.
         imageio.imwrite(prediction_path, instances, compression=5)
@@ -383,6 +398,9 @@ def run_inference_with_prompts(
         with open(box_prompt_save_path, "wb") as f:
             pickle.dump(cached_box_prompts, f)
 
+    if time_file:
+        with open(time_file, 'a') as f:
+            f.write(str(sum(inference_times)/len(inference_times)) + '\n')
 
 def _save_segmentation(masks, prediction_path):
     # masks to segmentation
