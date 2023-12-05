@@ -75,7 +75,7 @@ def finetune_livecell(args):
         compile_model=False,
         mask_prob=0.5  # (optional) overwrite to provide the probability of using mask inputs while training
     )
-    trainer.fit(args.iterations, save_every_kth_epoch=None)
+    trainer.fit(args.iterations, save_every_kth_epoch=1)
     if args.export_path is not None:
         checkpoint_path = os.path.join(
             "" if args.save_root is None else args.save_root, "checkpoints", checkpoint_name, "best.pt"
