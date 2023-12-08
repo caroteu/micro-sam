@@ -16,6 +16,7 @@ from tqdm import tqdm
 
 from .. import instance_segmentation
 from .. import util
+import time
 
 
 def _get_range_of_search_values(input_vals, step):
@@ -225,6 +226,7 @@ def run_amg_grid_search_and_inference(
     embedding_dir: Union[str, os.PathLike],
     prediction_dir: Union[str, os.PathLike],
     result_dir: Union[str, os.PathLike],
+    time_file: Union[str, os.PathLike],
     iou_thresh_values: Optional[List[float]] = None,
     stability_score_values: Optional[List[float]] = None,
     amg_kwargs: Optional[Dict[str, Any]] = None,
@@ -242,6 +244,7 @@ def run_amg_grid_search_and_inference(
         embedding_dir: Folder to cache the image embeddings.
         prediction_dir: Folder to save the predictions.
         result_dir: Folder to cache the evaluation results per image.
+        time_file: File to save the inference times.
         iou_thresh_values: The values for `pred_iou_thresh` used in the gridsearch.
             By default values in the range from 0.6 to 0.9 with a stepsize of 0.025 will be used.
         stability_score_values: The values for `stability_score_thresh` used in the gridsearch.
@@ -252,6 +255,8 @@ def run_amg_grid_search_and_inference(
         AMG: The automatic mask generator. By default `micro_sam.instance_segmentation.AutomaticMaskGenerator`.
         verbose_gs: Whether to run the gridsearch for individual images in a verbose mode.
     """
+
+    amg_start_time = time.time()
     run_amg_grid_search(
         predictor, val_image_paths, val_gt_paths, embedding_dir, result_dir,
         iou_thresh_values=iou_thresh_values, stability_score_values=stability_score_values,
@@ -270,3 +275,11 @@ def run_amg_grid_search_and_inference(
     run_amg_inference(
         predictor, test_image_paths, embedding_dir, prediction_dir, amg_kwargs, amg_generate_kwargs, AMG
     )
+
+    amg_end_time = time.time()
+
+    n_imgs = len(val_image_paths)
+    amg_time = (amg_end_time - amg_start_time)/n_imgs
+
+    with open(time_file, 'a') as f:
+        f.write('amg,' + amg_time + '\n')

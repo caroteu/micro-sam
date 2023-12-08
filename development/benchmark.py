@@ -30,10 +30,11 @@ import pandas as pd
 from micro_sam.sample_data import fetch_livecell_example_data
 
 
-def _get_image_and_predictor(model_type, device):
-    example_data = fetch_livecell_example_data("../examples/data")
+def _get_image_and_predictor(model_type, device, checkpoint_path, image_path):
+    #example_data = fetch_livecell_example_data("../examples/data")
+    example_data = image_path
     image = imageio.imread(example_data)
-    predictor = util.get_sam_model(device, model_type)
+    predictor = util.get_sam_model(model_type, device, checkpoint_path=checkpoint_path)
     return image, predictor
 
 
@@ -166,7 +167,7 @@ def main():
                         choices=['cpu', 'cuda', 'mps'],
                         help="Which PyTorch backend device to use (REQUIRED)")
     parser.add_argument("--model_type", "-m", default="vit_h",
-                        choices=list(util._MODEL_URLS),
+                        choices=list(util._MODEL_TYPES),
                         help="Which deep learning model to use")
     parser.add_argument("--benchmark_embeddings", "-e", action="store_false",
                         help="Skip embedding benchmark test, do not run")
@@ -176,15 +177,23 @@ def main():
                         help="Skip automatic mask generation (amg) benchmark test, do not run")
     parser.add_argument("-n", "--n", type=int, default=None,
                         help="Number of times to repeat benchmark tests")
+ 
+    parser.add_argument("-i", "--image", help="Path to test image")
+    parser.add_argument("-c", "--checkpoint", help="Checkpoint path")
+    parser.add_argument("-s", "--save_path", help='Path where benchmark results will be saved')
 
     args = parser.parse_args()
 
     model_type = args.model_type
     device = util.get_device(args.device)
+    checkpoint_path = args.checkpoint
+    image_path = args.image
+
+
     print("Running benchmarks for", model_type)
     print("with device:", device)
 
-    image, predictor = _get_image_and_predictor(model_type, device)
+    image, predictor = _get_image_and_predictor(model_type, device, checkpoint_path, image_path)
 
     benchmark_results = []
     if args.benchmark_embeddings:
@@ -194,13 +203,14 @@ def main():
     if args.benchmark_prompts:
         name, rt = benchmark_prompts(image, predictor, args.n)
         benchmark_results = _add_result(benchmark_results, model_type, device, name, rt)
-
+        
     if args.benchmark_amg:
         name, rt = benchmark_amg(image, predictor, args.n)
         benchmark_results = _add_result(benchmark_results, model_type, device, name, rt)
 
     benchmark_results = pd.concat(benchmark_results)
     print(benchmark_results.to_markdown(index=False))
+    benchmark_results.to_csv(args.save_path)
 
 
 if __name__ == "__main__":

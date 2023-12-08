@@ -150,6 +150,7 @@ def run_livecell_amg(
     input_folder: Union[str, os.PathLike],
     model_type: str,
     experiment_folder: Union[str, os.PathLike],
+    timeit: bool,
     iou_thresh_values: Optional[List[float]] = None,
     stability_score_values: Optional[List[float]] = None,
     verbose_gs: bool = False,
@@ -163,6 +164,7 @@ def run_livecell_amg(
         input_folder: The folder with the livecell data.
         model_type: The type of the segmenta anything model.
         experiment_folder: The folder where to save all data associated with the experiment.
+        timeit: Whether to save the inference time
         iou_thresh_values: The values for `pred_iou_thresh` used in the gridsearch.
             By default values in the range from 0.6 to 0.9 with a stepsize of 0.025 will be used.
         stability_score_values: The values for `stability_score_thresh` used in the gridsearch.
@@ -181,6 +183,11 @@ def run_livecell_amg(
         amg_prefix = "amg"
         AMG = AutomaticMaskGenerator
 
+    # where the inference times will be saved
+    if timeit:
+        time_file = os.path.join(experiment_folder, 'time.csv')
+        os.makedirs(time_file, exist_ok=True)
+
     # where the predictions are saved
     prediction_folder = os.path.join(experiment_folder, amg_prefix, "inference")
     os.makedirs(prediction_folder, exist_ok=True)
@@ -195,7 +202,7 @@ def run_livecell_amg(
     predictor = inference.get_predictor(checkpoint, model_type)
     automatic_mask_generation.run_amg_grid_search_and_inference(
         predictor, val_image_paths, val_gt_paths, test_image_paths,
-        embedding_folder, prediction_folder, gs_result_folder,
+        embedding_folder, prediction_folder, gs_result_folder, time_file,
         iou_thresh_values=iou_thresh_values, stability_score_values=stability_score_values,
         AMG=AMG, verbose_gs=verbose_gs,
     )
