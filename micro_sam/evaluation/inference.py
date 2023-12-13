@@ -172,7 +172,7 @@ def get_predictor(
     else:  # Vanilla SAM model
         assert not return_state
         predictor = util.get_sam_model(
-            model_type=model_type, device=device, checkpoint_path=checkpoint_path
+            model_type=model_type, device=device, checkpoint_path=checkpoint_path, use_fast_sam=True
         )  # type: ignore
     return predictor
 

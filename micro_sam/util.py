@@ -22,12 +22,10 @@ from nifty.tools import blocking
 from skimage.measure import regionprops
 from skimage.segmentation import relabel_sequential
 
-try:
-    from mobile_sam import sam_model_registry, SamPredictor
-    VIT_T_SUPPORT = True
-except ImportError:
-    from segment_anything import sam_model_registry, SamPredictor
-    VIT_T_SUPPORT = False
+from segment_anything_fast import sam_model_registry, sam_model_fast_registry, SamPredictor
+
+import time
+
 
 try:
     from napari.utils import progress as tqdm
@@ -182,6 +180,7 @@ def get_sam_model(
     device: Optional[Union[str, torch.device]] = None,
     checkpoint_path: Optional[Union[str, os.PathLike]] = None,
     return_sam: bool = False,
+    use_fast_sam: bool = False,
 ) -> SamPredictor:
     r"""Get the SegmentAnything Predictor.
 
@@ -242,13 +241,23 @@ def get_sam_model(
     abbreviated_model_type = model_type[:5]
     if abbreviated_model_type not in _MODEL_TYPES:
         raise ValueError(f"Invalid model_type: {abbreviated_model_type}. Expect one of {_MODEL_TYPES}")
-    if abbreviated_model_type == "vit_t" and not VIT_T_SUPPORT:
+    
+    if abbreviated_model_type == "vit_t":
         raise RuntimeError(
-            "mobile_sam is required for the vit-tiny."
-            "You can install it via 'pip install git+https://github.com/ChaoningZhang/MobileSAM.git'"
+            "Vit-t is not supported with segment_anything_fast"
         )
+    
+    #if abbreviated_model_type == "vit_t" and not VIT_T_SUPPORT:
+    #    raise RuntimeError(
+    #        "mobile_sam is required for the vit-tiny."
+    #        "You can install it via 'pip install git+https://github.com/ChaoningZhang/MobileSAM.git'"
+    #    )
 
-    sam = sam_model_registry[abbreviated_model_type](checkpoint=checkpoint)
+    if use_fast_sam:
+        sam = sam_model_fast_registry[abbreviated_model_type](checkpoint=checkpoint)
+    else:
+        sam = sam_model_registry[abbreviated_model_type](checkpoint=checkpoint)
+
     sam.to(device=device)
     predictor = SamPredictor(sam)
     predictor.model_type = abbreviated_model_type

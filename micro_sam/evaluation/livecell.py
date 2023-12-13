@@ -81,8 +81,7 @@ def livecell_inference(
     n_positives: Optional[int] = None,
     n_negatives: Optional[int] = None,
     prompt_folder: Optional[Union[str, os.PathLike]] = None,
-    predictor: Optional[SamPredictor] = None,
-    time_file: Optional[Union[str, os.PathLike]] = None
+    predictor: Optional[SamPredictor] = None
 ) -> None:
     """Run inference for livecell with a fixed prompt setting.
 
@@ -126,10 +125,6 @@ def livecell_inference(
         prompt_folder = os.path.join(experiment_folder, "prompts")
         os.makedirs(prompt_folder, exist_ok=True)
 
-    if time_file:
-        with open(time_file, 'a') as f:
-            f.write(setting_name + ',')
-
     inference.run_inference_with_prompts(
         predictor,
         image_paths,
@@ -141,7 +136,6 @@ def livecell_inference(
         use_boxes=use_boxes,
         n_positives=n_positives,
         n_negatives=n_negatives,
-        time_file=time_file
     )
 
 
@@ -150,7 +144,6 @@ def run_livecell_amg(
     input_folder: Union[str, os.PathLike],
     model_type: str,
     experiment_folder: Union[str, os.PathLike],
-    timeit: bool,
     iou_thresh_values: Optional[List[float]] = None,
     stability_score_values: Optional[List[float]] = None,
     verbose_gs: bool = False,
@@ -183,10 +176,6 @@ def run_livecell_amg(
         amg_prefix = "amg"
         AMG = AutomaticMaskGenerator
 
-    # where the inference times will be saved
-    if timeit:
-        time_file = os.path.join(experiment_folder, 'time.csv')
-        os.makedirs(time_file, exist_ok=True)
 
     # where the predictions are saved
     prediction_folder = os.path.join(experiment_folder, amg_prefix, "inference")
@@ -202,7 +191,7 @@ def run_livecell_amg(
     predictor = inference.get_predictor(checkpoint, model_type)
     automatic_mask_generation.run_amg_grid_search_and_inference(
         predictor, val_image_paths, val_gt_paths, test_image_paths,
-        embedding_folder, prediction_folder, gs_result_folder, time_file,
+        embedding_folder, prediction_folder, gs_result_folder,
         iou_thresh_values=iou_thresh_values, stability_score_values=stability_score_values,
         AMG=AMG, verbose_gs=verbose_gs,
     )
@@ -210,11 +199,6 @@ def run_livecell_amg(
 
 def _run_multiple_prompt_settings(args, prompt_settings):
     predictor = inference.get_predictor(args.ckpt, args.model)
-
-    if args.timeit:
-        time_file = os.path.join(args.experiment_folder, 'time.csv')
-    else:
-        time_file = None
         
     for settings in prompt_settings:
         livecell_inference(
@@ -228,7 +212,6 @@ def _run_multiple_prompt_settings(args, prompt_settings):
             n_negatives=settings["n_negatives"],
             prompt_folder=args.prompt_folder,
             predictor=predictor,
-            time_file=time_file
         )
 
 
@@ -246,9 +229,6 @@ def run_livecell_inference() -> None:
     parser.add_argument("-m", "--model", type=str, required=True,
                         help="Pass the checkpoint-specific model name being used for inference.")
 
-
-    #NOTE: The following is a preliminary idea on how to implement the timing of the inference
-    parser.add_argument("-t", "--timeit", action="store_true")
 
     # the experiment type:
     # - default settings (p1-n0, p2-n4, p4-n8, box)
@@ -280,13 +260,11 @@ def run_livecell_inference() -> None:
         prompt_settings = default_experiment_settings()
         _run_multiple_prompt_settings(args, prompt_settings)
     elif args.auto_mask_generation:
-        run_livecell_amg(args.ckpt, args.input, args.model, args.experiment_folder, args.timeit)
+        run_livecell_amg(args.ckpt, args.input, args.model, args.experiment_folder)
     else:
-        if args.timeit:
-            time_file = os.path.join(args.experiment_folder, 'time.csv')
         livecell_inference(
             args.ckpt, args.input, args.model, args.experiment_folder,
-            args.points, args.box, args.positive, args.negative, args.prompt_folder, time_file
+            args.points, args.box, args.positive, args.negative, args.prompt_folder
         )
 
 
