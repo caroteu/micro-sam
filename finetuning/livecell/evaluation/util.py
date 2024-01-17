@@ -36,7 +36,7 @@ def get_model(name=None, model_type=None, ckpt=None):
     if ckpt is None:
         ckpt, model_type = get_checkpoint(name)
     assert (ckpt is not None) and (model_type is not None)
-    predictor = get_predictor(ckpt, model_type)
+    predictor = get_predictor(ckpt, model_type, is_custom_model=True)
     return predictor
 
 
