@@ -38,15 +38,13 @@ def _get_image_and_predictor(model_type, device, checkpoint_path, image_path):
     return image, predictor
 
 
-def _add_result(benchmark_results, model_type, device, name, runtimes):
+def _add_result(benchmark_results, name, runtimes, runtimes_wo):
     nres = len(name)
     assert len(name) == len(runtimes)
     res = {
-        "model": [model_type] * nres,
-        "device": [device] * nres,
         "benchmark": name,
-        "runtime": runtimes,
-        #"error": errors,
+        "mean runtime": runtimes,
+        "mean runtime w/o outlier": runtimes_wo
     }
     tab = pd.DataFrame(res)
     benchmark_results.append(tab)
@@ -61,10 +59,10 @@ def benchmark_embeddings(image, predictor, n):
         t0 = time.time()
         util.precompute_image_embeddings(predictor, image)
         times.append(time.time() - t0)
-    #runtime = np.mean(times)
-    runtime = times
-    #error = np.std(times)/np.sqrt(n)
-    return ["embeddings"], [runtime]#, [error]
+    runtime = np.mean(times)
+    runtime_wo = np.mean(times[1:])
+
+    return ["embeddings"], [runtime], [runtime_wo]
 
 
 def benchmark_prompts(image, predictor, n):
@@ -72,15 +70,15 @@ def benchmark_prompts(image, predictor, n):
     n = 10 if n is None else n
     names, runtimes = [], []
 
-    embeddings = util.precompute_image_embeddings(predictor, image)
     np.random.seed(42)
 
-    names, runtimes, errors = [], [], []
+    names, runtimes, runtimes_wo = [], [], []
 
     # from random single point
     times = []
     for _ in range(n):
         t0 = time.time()
+        embeddings = util.precompute_image_embeddings(predictor, image)
         points = np.array([
             np.random.randint(0, image.shape[0]),
             np.random.randint(0, image.shape[1]),
@@ -89,16 +87,15 @@ def benchmark_prompts(image, predictor, n):
         seg.segment_from_points(predictor, points, labels, embeddings)
         times.append(time.time() - t0)
     names.append("prompt-p1n0")
-    #runtimes.append(np.min(times))
-    #runtimes.append(np.mean(times))
-    runtimes.append(times)
-    #errors.append(np.std(times)/np.sqrt(n))
+    runtimes.append(np.mean(times))
+    runtimes_wo.append(np.mean(times[1:]))
 
 
     # from random 2p4n
     times = []
     for _ in range(n):
         t0 = time.time()
+        embeddings = util.precompute_image_embeddings(predictor, image)
         points = np.concatenate([
             np.random.randint(0, image.shape[0], size=6)[:, None],
             np.random.randint(0, image.shape[1], size=6)[:, None],
@@ -107,15 +104,14 @@ def benchmark_prompts(image, predictor, n):
         seg.segment_from_points(predictor, points, labels, embeddings)
         times.append(time.time() - t0)
     names.append("prompt-p2n4")
-    #runtimes.append(np.mean(times))
-    #errors.append(np.std(times)/np.sqrt(n))
-    runtimes.append(times)
-    #runtimes.append(np.min(times))
+    runtimes.append(np.mean(times))
+    runtimes_wo.append(np.mean(times[1:]))
 
     # from bounding box
     times = []
     for _ in range(n):
         t0 = time.time()
+        embeddings = util.precompute_image_embeddings(predictor, image)
         box_size = np.random.randint(20, 100, size=2)
         box_start = [
             np.random.randint(0, image.shape[0] - box_size[0]),
@@ -128,11 +124,11 @@ def benchmark_prompts(image, predictor, n):
         seg.segment_from_box(predictor, box, embeddings)
         times.append(time.time() - t0)
     names.append("prompt-box")
-    #runtimes.append(np.mean(times))
-    #errors.append(np.std(times)/np.sqrt(n))
-    #runtimes.append(np.min(times))
-    runtimes.append(times)
+    runtimes.append(np.mean(times))
+    runtimes_wo.append(np.mean(times[1:]))
 
+    return names, runtimes, runtimes_wo
+"""
     # from bounding box and points
     times = []
     for _ in range(n):
@@ -158,25 +154,23 @@ def benchmark_prompts(image, predictor, n):
     #errors.append(np.std(times)/np.sqrt(n))
     #runtimes.append(np.min(times))
     runtimes.append(times)
-
-    return names, runtimes#, errors
+"""
 
 
 def benchmark_amg(image, predictor, n):
     print("Running benchmark_amg ...")
     n = 1 if n is None else n
-    embeddings = util.precompute_image_embeddings(predictor, image)
     amg = instance_seg.AutomaticMaskGenerator(predictor)
     times = []
     for _ in range(n):
         t0 = time.time()
+        embeddings = util.precompute_image_embeddings(predictor, image)
         amg.initialize(image, embeddings)
         amg.generate()
         times.append(time.time() - t0)
     runtime = np.mean(times)
-    runtime = times
-    #error = np.std(times)/np.sqrt(n)
-    return ["amg"], [runtime]#, [error]
+    runtime_wo = np.mean(times[1:])
+    return ["amg"], [runtime], [runtime_wo]
 
 
 def main():
@@ -215,16 +209,16 @@ def main():
 
     benchmark_results = []
     if args.benchmark_embeddings:
-        name, rt = benchmark_embeddings(image, predictor, args.n)
-        benchmark_results = _add_result(benchmark_results, model_type, device, name, rt)#, err)
+        name, rt, rt_wo = benchmark_embeddings(image, predictor, args.n)
+        benchmark_results = _add_result(benchmark_results, name, rt, rt_wo)
 
     if args.benchmark_prompts:
-        name, rt = benchmark_prompts(image, predictor, args.n)
-        benchmark_results = _add_result(benchmark_results, model_type, device, name, rt)#, err)
+        name, rt, rt_wo = benchmark_prompts(image, predictor, args.n)
+        benchmark_results = _add_result(benchmark_results, name, rt, rt_wo)
         
     if args.benchmark_amg:
-        name, rt = benchmark_amg(image, predictor, args.n)
-        benchmark_results = _add_result(benchmark_results, model_type, device, name, rt)#, err)
+        name, rt, rt_wo = benchmark_amg(image, predictor, args.n)
+        benchmark_results = _add_result(benchmark_results, name, rt, rt_wo)
 
     benchmark_results = pd.concat(benchmark_results)
     print(benchmark_results.to_markdown(index=False))
