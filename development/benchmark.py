@@ -30,11 +30,12 @@ import pandas as pd
 from micro_sam.sample_data import fetch_livecell_example_data
 
 
-def _get_image_and_predictor(model_type, device, checkpoint_path, image_path):
+def _get_image_and_predictor(model_type, device, checkpoint_path,image_path):
     #example_data = fetch_livecell_example_data("../examples/data")
     example_data = image_path
     image = imageio.imread(example_data)
-    predictor = util.get_custom_sam_model(checkpoint_path, model_type, device)
+    predictor = util.get_sam_model(model_type, device, checkpoint_path)
+    #predictor = util.get_custom_sam_model(checkpoint_path, model_type, device)
     return image, predictor
 
 
