@@ -68,9 +68,12 @@ def _get_image_and_predictor(model_type, device, checkpoint_path,image_path):
             image_paths.append(filepath)
         except Exception as e:
             print(f"Error reading {filepath}: {e}")
-  
-    predictor = util.get_sam_model(model_type, device, checkpoint_path)
-    #predictor = util.get_custom_sam_model(checkpoint_path, model_type, device)
+    
+    if checkpoint_path.endswith('.pt'):
+        predictor = util.get_custom_sam_model(checkpoint_path, model_type, device)
+    else:
+        predictor = util.get_sam_model(model_type, device, checkpoint_path)
+    
     return images, image_paths, predictor
 
 
