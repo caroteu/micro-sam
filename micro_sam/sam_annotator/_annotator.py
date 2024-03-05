@@ -50,7 +50,7 @@ class _AnnotatorBase(Container):
         self._viewer.layers["committed_objects"].new_colormap()
 
     def _create_widgets(self, segment_widget, segment_nd_widget, autosegment_widget, commit_widget, clear_widget):
-        self._embedding_widget = widgets.embedding_widget()
+        self._embedding_widget = widgets.embedding()
         # Connect the call button of the embedding widget with a function
         # that updates all relevant layers when the image changes.
         self._embedding_widget.call_button.changed.connect(self._update_image)
@@ -75,24 +75,24 @@ class _AnnotatorBase(Container):
         self.extend(widget_list)
 
     def _create_keybindings(self):
-        @self._viewer.bind_key("s")
+        @self._viewer.bind_key("s", overwrite=True)
         def _segment(viewer):
             self._segment_widget(viewer)
 
-        @self._viewer.bind_key("c")
+        @self._viewer.bind_key("c", overwrite=True)
         def _commit(viewer):
             self._commit_widget(viewer)
 
-        @self._viewer.bind_key("t")
+        @self._viewer.bind_key("t", overwrite=True)
         def _toggle_label(event=None):
             vutil.toggle_label(self._point_prompt_layer)
 
-        @self._viewer.bind_key("Shift-C")
+        @self._viewer.bind_key("Shift-C", overwrite=True)
         def _clear_annotations(viewer):
             self._clear_widget(viewer)
 
         if hasattr(self, "_segment_nd_widget"):
-            @self._viewer.bind_key("Shift-S")
+            @self._viewer.bind_key("Shift-S", overwrite=True)
             def _seg_nd(viewer):
                 self._segment_nd_widget(viewer)
 
@@ -108,8 +108,8 @@ class _AnnotatorBase(Container):
         segment_widget: Widget,
         segment_nd_widget: Optional[Widget] = None,
         autosegment_widget: Optional[Widget] = None,
-        commit_widget: Widget = widgets.commit_segmentation_widget,
-        clear_widget: Widget = widgets.clear_widget,
+        commit_widget: Widget = widgets.commit,
+        clear_widget: Widget = widgets.clear,
         segmentation_result: Optional[np.ndarray] = None,
     ) -> None:
         """
