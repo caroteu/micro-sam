@@ -195,7 +195,7 @@ def benchmark_ais(image_paths, segmenter, n):
         
     runtime = np.mean(times)
     error = np.std(times)
-    return ["amg"], [runtime], [error]
+    return ["ais"], [runtime], [error]
 
 
 def main():
@@ -250,7 +250,7 @@ def main():
     
     if args.benchmark_ais:
         segmenter = instance_seg.load_instance_segmentation_with_decoder_from_checkpoint(
-            args.checkpoint, args.model_type, is_custom_checkpoint=False
+            args.checkpoint, args.model_type
         )
         name, rt, err = benchmark_ais(image_paths, segmenter, args.n)
         benchmark_results = _add_result(benchmark_results, name, rt, err)
