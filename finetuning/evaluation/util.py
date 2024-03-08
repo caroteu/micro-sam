@@ -80,9 +80,11 @@ def get_dataset_paths(dataset_name, split_choice):
 
 
 def get_model(model_type, ckpt):
+    custom_model = True
     if ckpt is None:
         ckpt = VANILLA_MODELS[model_type]
-    predictor = get_predictor(ckpt, model_type)
+        custom_model = False
+    predictor = get_predictor(ckpt, model_type, is_custom_model=custom_model)
     return predictor
 
 

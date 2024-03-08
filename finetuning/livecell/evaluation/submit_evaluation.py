@@ -4,9 +4,10 @@ import shutil
 import subprocess
 from glob import glob
 from datetime import datetime
+import argparse
 
 
-def write_batch_script(env_name, out_path, inference_setup, checkpoint, model_type, experiment_folder, delay=None):
+def write_batch_script(env_name, out_path, inference_setup, checkpoint, model_type, experiment_folder, epoch, delay=None):
     """Writing scripts with different fold-trainings for micro-sam evaluation
     """
     batch_script = f"""#!/bin/bash
@@ -15,49 +16,49 @@ def write_batch_script(env_name, out_path, inference_setup, checkpoint, model_ty
 #SBATCH -t 2-00:00:00
 #SBATCH -p grete:shared
 #SBATCH -G A100:1
+#SBATCH --constraint=80gb
 #SBATCH -A nim00007
-#SBATCH --job-name={inference_setup}
+#SBATCH --job-name={model_type}-{epoch}
 
 source ~/.bashrc
 mamba activate {env_name} \n"""
-
+    
     if delay is not None:
         batch_script += f"sleep {delay} \n"
 
-    # python script
-    python_script = f"python {inference_setup}.py "
-
-    _op = out_path[:-3] + f"_{inference_setup}.sh"
-
-    # add the finetuned checkpoint
-    python_script += f"-c {checkpoint} "
-
-    # name of the model configuration
-    python_script += f"-m {model_type} "
-
-    # experiment folder
-    python_script += f"-e {experiment_folder} "
-
-    # let's add the python script to the bash script
-    batch_script += python_script
-
-    with open(_op, "w") as f:
+    with open(out_path, "w") as f:
         f.write(batch_script)
 
-    # we run the first prompt for iterative once starting with point, and then starting with box (below)
-    if inference_setup == "iterative_prompting":
-        batch_script += "--box "
+    for current_setup in inference_setup:
 
-        new_path = out_path[:-3] + f"_{inference_setup}_box.sh"
-        with open(new_path, "w") as f:
-            f.write(batch_script)
+        # python script
+        python_script = f"\npython ~/micro-sam/finetuning/livecell/evaluation/{current_setup}.py "
+
+        # add the finetuned checkpoint
+        python_script += f"-c {checkpoint} "
+
+        # name of the model configuration
+        python_script += f"-m {model_type} "
+
+        # experiment folder
+        python_script += f"-e {experiment_folder} "
+
+        with open(out_path, "a") as f:
+            f.write(python_script)
+
+        # we run the first prompt for iterative once starting with point, and then starting with box (below)
+        if current_setup == "iterative_prompting":
+            python_script += "--box"
+
+            with open(out_path, "a") as f:
+                f.write(python_script)
 
 
-def get_batch_script_names(tmp_folder):
+def get_batch_script_names(tmp_folder, model_type, epoch):
     tmp_folder = os.path.expanduser(tmp_folder)
     os.makedirs(tmp_folder, exist_ok=True)
 
-    script_name = "livecell-inference"
+    script_name = f"{model_type}_ep{epoch}_"
 
     dt = datetime.now().strftime("%Y_%m_%d_%H_%M_%S_%f")
     tmp_name = script_name + dt
@@ -66,29 +67,23 @@ def get_batch_script_names(tmp_folder):
     return batch_script
 
 
-def submit_slurm():
+def submit_slurm(epoch, model_type):
     """Submit python script that needs gpus with given inputs on a slurm node.
     """
-    tmp_folder = "./gpu_jobs"
+    tmp_folder = f"./gpu_jobs"
 
     # parameters to run the inference scripts
     environment_name = "sam"
-    model_type = "vit_b"
-    experiment_set = "vanilla"  # infer using specialists / generalists / vanilla models
-    make_delay = "1m"  # wait for precomputing the embeddings and later run inference scripts
+    experiment_set = "vanilla" if epoch == 0 else "specialist" # infer using specialists / generalists / vanilla models
 
     # let's set the experiment type - either using the specialists or generalists or just using vanilla model
-    if experiment_set == "generalists":
-        checkpoint = f"/scratch/usr/nimanwai/micro-sam/checkpoints/{model_type}/lm_generalist_sam/best.pt"
-        experiment_folder = "/scratch/projects/nim00007/sam/experiments/new_models/generalists/lm/livecell/"
-
-    elif experiment_set == "specialists":
-        checkpoint = f"/scratch/usr/nimanwai/micro-sam/checkpoints/{model_type}/livecell_sam/best.pt"
-        experiment_folder = "/scratch/projects/nim00007/sam/experiments/new_models/specialists/lm/livecell/"
+    if experiment_set == "specialist":
+        checkpoint = f"/scratch-emmy/usr/nimcarot/{model_type}/checkpoints/livecell_sam/epoch-{epoch}.pt"
+        experiment_folder = f"/scratch/usr/nimcarot/sam/experiments/perf_over_epochs_2/epoch{epoch}/"
 
     elif experiment_set == "vanilla":
         checkpoint = None
-        experiment_folder = "/scratch/projects/nim00007/sam/experiments/new_models/vanilla/lm/livecell/"
+        experiment_folder = f"/scratch/usr/nimcarot/sam/experiments/perf_over_epochs_2/epoch0/"
 
     else:
         raise ValueError("Choose from specialists / generalists / vanilla")
@@ -97,33 +92,27 @@ def submit_slurm():
 
     # now let's run the experiments
     if experiment_set == "vanilla":
-        all_setups = ["precompute_embeddings", "evaluate_amg", "iterative_prompting"]
+        all_setups = ["evaluate_amg", "iterative_prompting"]
     else:
-        all_setups = ["precompute_embeddings", "evaluate_amg", "evaluate_instance_segmentation", "iterative_prompting"]
-    for current_setup in all_setups:
-        write_batch_script(
-            env_name=environment_name,
-            out_path=get_batch_script_names(tmp_folder),
-            inference_setup=current_setup,
-            checkpoint=checkpoint,
-            model_type=model_type,
-            experiment_folder=experiment_folder,
-            delay=None if current_setup == "precompute_embeddings" else make_delay
-            )
+        all_setups = ["evaluate_amg", "evaluate_instance_segmentation", "iterative_prompting"]
 
-    # the logic below automates the process of first running the precomputation of embeddings, and only then inference.
-    job_id = []
-    for i, my_script in enumerate(sorted(glob(tmp_folder + "/*"))):
-        cmd = ["sbatch", my_script]
+    batch_script_name = get_batch_script_names(tmp_folder, model_type, epoch)
 
-        if i > 0:
-            cmd.insert(1, f"--dependency=afterany:{job_id[0]}")
+    write_batch_script(
+        env_name=environment_name,
+        out_path=batch_script_name,
+        inference_setup=all_setups,
+        checkpoint=checkpoint,
+        model_type=model_type,
+        experiment_folder=experiment_folder,
+        epoch=epoch,
+        delay=None,
+        )
 
-        cmd_out = subprocess.run(cmd, capture_output=True, text=True)
-        print(cmd_out.stdout if len(cmd_out.stdout) > 1 else cmd_out.stderr)
-
-        if i == 0:
-            job_id.append(re.findall(r'\d+', cmd_out.stdout)[0])
+    cmd = ["sbatch", batch_script_name]
+    cmd_out = subprocess.run(cmd, capture_output=True, text=True)
+    
+    print(cmd_out.stdout if len(cmd_out.stdout) > 1 else cmd_out.stderr)
 
 
 if __name__ == "__main__":
@@ -132,4 +121,6 @@ if __name__ == "__main__":
     except FileNotFoundError:
         pass
 
-    submit_slurm()
+    for epoch in [2,3,4,5,6,7,8,9,10,20,30,40,50,60,62]:
+        for model in ["vit_t", "vit_b", "vit_l", "vit_h"]:
+            submit_slurm(epoch, model)

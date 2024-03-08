@@ -159,7 +159,8 @@ def get_predictor(
 
     # By default we check if the model follows the torch_em checkpint naming scheme to check whether it is a
     # custom model or not. This can be over-ridden by passing True or False for is_custom_model.
-    is_custom_model = checkpoint_path.split("/")[-1] == "best.pt" if is_custom_model is None else is_custom_model
+    #is_custom_model = checkpoint_path.split("/")[-1] == "best.pt" if is_custom_model is None else is_custom_model
+    is_custom_model = checkpoint_path.endswith('.pt') if is_custom_model is None else is_custom_model
 
     if is_custom_model:  # Finetuned SAM model
         predictor = util.get_custom_sam_model(

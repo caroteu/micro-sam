@@ -51,6 +51,7 @@ def evaluate_interactive_prompting(dataset_name, prediction_root, start_with_box
 
 
 def main():
+    print("This is the main")
     args = get_default_arguments()
 
     start_with_box_prompt = args.box  # overwrite to start first iters' prompt with box instead of single point
