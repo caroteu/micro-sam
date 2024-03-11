@@ -125,7 +125,7 @@ class AnnotatorTracking(_AnnotatorBase):
             name="prompts",
             edge_color="green",
             property_choices={"track_id": ["1"]},
-            # properties={"track_id": ["1", "1"], "state": state_labels},
+            # property_choces={"track_id": ["1"], "state": self._track_state_labels},
             # edge_color_cycle=STATE_COLOR_CYCLE,
         )
         # self._box_prompt_layer.edge_color_mode = "cycle"
@@ -225,6 +225,7 @@ def annotator_tracking(
     state.initialize_predictor(
         image, model_type=model_type, save_path=embedding_path,
         halo=halo, tile_shape=tile_shape, predictor=predictor,
+        ndim=3,
     )
     state.image_shape = image.shape[:-1] if image.ndim == 4 else image.shape
 
