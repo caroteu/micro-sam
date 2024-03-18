@@ -14,6 +14,7 @@ MODELS = ['vit_t', 'vit_b', 'vit_l', 'vit_h']
 
 def get_radar_plot(ax, dfs, model_name):
     
+    plt.rcParams["hatch.linewidth"] = 1.5
     cat = dfs[0]['benchmark'].unique().tolist()
     cat = [*cat, cat[0]] #to close the radar, duplicate the first column
     n_points = len(cat)
@@ -44,7 +45,8 @@ def get_radar_plot(ax, dfs, model_name):
 
         for _x, _y, t in zip(label_loc, group_norm, group):
             t = f'{t:.2f}' if isinstance(t, float) else str(t)
-            ax.text(_x, _y, t, size='xx-small')
+            offset = 0.0
+            ax.text(_x, _y-offset, t, va='top', ha='center', fontsize=10)
 
 
         ax.fill(label_loc, group_norm + err, facecolor=PALETTE[MODELS[i]], alpha=0.25)
@@ -75,22 +77,21 @@ def get_radar_plot(ax, dfs, model_name):
 
 def main():
 
-    vit_t_gpu = pd.read_csv(f"{EXPERIMENT_ROOT}benchmark_vit_t_ft_0503.csv")    
-    vit_b_gpu = pd.read_csv(f"{EXPERIMENT_ROOT}benchmark_vit_b_ft_0503.csv")    
-    vit_l_gpu = pd.read_csv(f"{EXPERIMENT_ROOT}benchmark_vit_l_ft_0503.csv")    
-    vit_h_gpu = pd.read_csv(f"{EXPERIMENT_ROOT}benchmark_vit_h_ft_0503.csv")    
+    vit_t_gpu = pd.read_csv(f"{EXPERIMENT_ROOT}benchmark_vit_t_ft_1803.csv")    
+    vit_b_gpu = pd.read_csv(f"{EXPERIMENT_ROOT}benchmark_vit_b_ft_1803.csv")    
+    vit_l_gpu = pd.read_csv(f"{EXPERIMENT_ROOT}benchmark_vit_l_ft_1803.csv")    
+    vit_h_gpu = pd.read_csv(f"{EXPERIMENT_ROOT}benchmark_vit_h_ft_1803.csv")    
 
-    vit_t_cpu = pd.read_csv(f"{EXPERIMENT_ROOT}benchmark_vit_t_ft_1003_cpu.csv")    
-    #vit_b_cpu = pd.read_csv(f"{EXPERIMENT_ROOT}benchmark_vit_b_ft_0403.csv")    
+    #vit_t_cpu = pd.read_csv(f"{EXPERIMENT_ROOT}benchmark_vit_t_ft_1003_cpu.csv")    
+    #vit_b_cpu = pd.read_csv(f"{EXPERIMENT_ROOT}benchmark_vit_b_ft_1003_cpu.csv")    
     #vit_l_cpu = pd.read_csv(f"{EXPERIMENT_ROOT}benchmark_vit_l_ft_0403.csv")    
     #vit_h_cpu = pd.read_csv(f"{EXPERIMENT_ROOT}benchmark_vit_h_ft_0403.csv")    
 
-    fig, ax = plt.subplots(2,2, figsize=(10,10))
+    fig, ax = plt.subplots(1,2, figsize=(10,10))
 
-    get_radar_plot(ax[0,0], [vit_t_gpu, vit_b_gpu, vit_l_gpu, vit_h_gpu], "GPU")
-    #get_radar_plot(ax[0,1], vit_b_gpu, vit_b_cpu, "ViT-B") 
-    #get_radar_plot(ax[1,0], vit_l_gpu, vit_l_cpu, "ViT-L")  
-    #get_radar_plot(ax[1,1], vit_h_gpu, vit_h_cpu, "ViT-H")  
+    get_radar_plot(ax[0], [vit_t_gpu, vit_b_gpu, vit_l_gpu, vit_h_gpu], "GPU")
+    #get_radar_plot(ax[0,1],[vit_t_cpu, vit_b_cpu, vit_l_cpu, vit_h_cpu], "CPU") 
+    
 
     plt.show()
     print("Saving plot ...  ")
