@@ -6,20 +6,20 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from plot_all_evaluation import EXPERIMENT_ROOT
-
+PROJECT_ROOT = "/scratch/projects/nim00007/sam/experiments"
+EXPERIMENT_ROOT = "/scratch/usr/nimcarot/sam/experiments/livecell"
 
 def gather_livecell_results(model_type, experiment_name, benchmark_choice):
     result_paths = glob(
         os.path.join(
-            EXPERIMENT_ROOT, "new_models", experiment_name, "lm", "livecell", model_type, "results", "*"
+            EXPERIMENT_ROOT, experiment_name, model_type, "results", "*"
         )
     )
     ais_score = None
     for result_path in sorted(result_paths):
         if os.path.split(result_path)[-1].startswith("grid_search_"):
             continue
-
+        print(result_path)
         res = pd.read_csv(result_path)
         setting_name = Path(result_path).stem
         if setting_name == "amg":
@@ -48,7 +48,7 @@ def gather_livecell_results(model_type, experiment_name, benchmark_choice):
     # let's get benchmark results
     cellpose_res = pd.read_csv(
         os.path.join(
-            EXPERIMENT_ROOT, "benchmarking", "cellpose", "livecell", "results", f"cellpose-{benchmark_choice}.csv"
+            PROJECT_ROOT, "benchmarking", "cellpose", "livecell", "results", f"cellpose-{benchmark_choice}.csv"
         )
     )["msa"][0]
 
