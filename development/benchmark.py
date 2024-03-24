@@ -20,19 +20,23 @@ https://jiffyclub.github.io/snakeviz/
 
 import argparse
 import time
+import sys
+import platform
 from PIL import Image
 import os
 import shutil
 
 import imageio.v3 as imageio
 import micro_sam.instance_segmentation as instance_seg
-from micro_sam.evaluation.instance_segmentation import run_instance_segmentation_inference
+from micro_sam.evaluation.instance_segmentation import run_instance_segmentation_inference, InstanceSegmentationWithDecoder
+
 import micro_sam.prompt_based_segmentation as seg
 import micro_sam.util as util
 import numpy as np
 import pandas as pd
 
 from micro_sam.sample_data import fetch_livecell_example_data
+
 
 def delete_files_in_directory(directory):
     for filename in os.listdir(directory):
@@ -101,8 +105,8 @@ def benchmark_embeddings(images, predictor, n):
         for image in images:
             util.precompute_image_embeddings(predictor, image)
         times.append(time.time() - t0)
-    runtime = np.mean(times[1:])
-    error = np.std(times[1:])
+    runtime = np.min(times)
+    error = np.std(times)
 
 
     return ["embeddings"], [runtime], [error]
@@ -131,7 +135,7 @@ def benchmark_prompts(images, predictor, n):
         times.append(time.time() - t0)
         
     names.append("prompt-p1n0")
-    runtimes.append(np.mean(times[1:]))
+    runtimes.append(np.min(times))
     errors.append(np.std(times[1:]))
 
    # from bounding box
@@ -152,7 +156,7 @@ def benchmark_prompts(images, predictor, n):
             seg.segment_from_box(predictor, box, embeddings)
         times.append(time.time() - t0)
     names.append("prompt-box")
-    runtimes.append(np.mean(times[1:]))
+    runtimes.append(np.min(times))
     errors.append(np.std(times[1:]))
 
     return names, runtimes, errors
@@ -162,7 +166,7 @@ def benchmark_amg(image_paths, predictor, n):
     
     amg = instance_seg.AutomaticMaskGenerator(predictor)
     prediction_dir = "predictions/"
-    embedding_dir = "/embeddings/"
+    embedding_dir = "embeddings/"
     times = []
     for _ in range(n):
         t0 = time.time()
@@ -174,7 +178,7 @@ def benchmark_amg(image_paths, predictor, n):
         delete_files_in_directory(embedding_dir)
         delete_files_in_directory(prediction_dir)
         
-    runtime = np.mean(times)
+    runtime = np.min(times)
     error = np.std(times)
     return ["amg"], [runtime], [error]
 
@@ -195,12 +199,13 @@ def benchmark_ais(image_paths, segmenter, n):
         delete_files_in_directory(embedding_dir)
         delete_files_in_directory(prediction_dir)
         
-    runtime = np.mean(times)
+    runtime = np.min(times)
     error = np.std(times)
     return ["ais"], [runtime], [error]
 
 
 def main():
+    print(sys.version)
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", "-d",
                         choices=['cpu', 'cuda', 'mps'],
@@ -245,17 +250,20 @@ def main():
     if args.benchmark_prompts:
         name, rt, err = benchmark_prompts(images, predictor, args.n)
         benchmark_results = _add_result(benchmark_results, name, rt, err)
-        
+ 
+    if args.benchmark_ais:
+        predictor, decoder = instance_seg.get_custom_sam_model_with_decoder(
+            args.checkpoint, args.model_type
+        )
+        segmenter = InstanceSegmentationWithDecoder(predictor, decoder)
+        name, rt, err = benchmark_ais(image_paths, segmenter, args.n)
+        benchmark_results = _add_result(benchmark_results, name, rt, err)
+
+       
     if args.benchmark_amg:
         name, rt, err = benchmark_amg(image_paths, predictor, args.n)
         benchmark_results = _add_result(benchmark_results, name, rt, err)
     
-    if args.benchmark_ais:
-        segmenter = instance_seg.load_instance_segmentation_with_decoder_from_checkpoint(
-            args.checkpoint, args.model_type
-        )
-        name, rt, err = benchmark_ais(image_paths, segmenter, args.n)
-        benchmark_results = _add_result(benchmark_results, name, rt, err)
 
     benchmark_results = pd.concat(benchmark_results)
     print(benchmark_results.to_markdown(index=False))
