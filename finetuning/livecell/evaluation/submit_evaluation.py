@@ -78,12 +78,12 @@ def submit_slurm(epoch, model_type):
 
     # let's set the experiment type - either using the specialists or generalists or just using vanilla model
     if experiment_set == "specialist":
-        checkpoint = f"/scratch-emmy/usr/nimcarot/{model_type}/checkpoints/livecell_sam/epoch-{epoch}.pt"
-        experiment_folder = f"/scratch/usr/nimcarot/sam/experiments/perf_over_epochs_2/epoch{epoch}/"
+        checkpoint = f"/scratch-grete/usr/nimcarot/sam/experiments/finetuning/{model_type}/checkpoints/livecell_sam/epoch-{epoch}.pt"
+        experiment_folder = f"/scratch-grete/usr/nimcarot/sam/experiments/livecell/"
 
     elif experiment_set == "vanilla":
         checkpoint = None
-        experiment_folder = f"/scratch/usr/nimcarot/sam/experiments/perf_over_epochs_2/epoch0/"
+        experiment_folder = f"/scratch-grete/usr/nimcarot/sam/experiments/perf_over_epochs/epoch0/"
 
     else:
         raise ValueError("Choose from specialists / generalists / vanilla")
@@ -121,6 +121,6 @@ if __name__ == "__main__":
     except FileNotFoundError:
         pass
 
-    for epoch in [2,3,4,5,6,7,8,9,10,20,30,40,50,60,62]:
-        for model in ["vit_t", "vit_b", "vit_l", "vit_h"]:
-            submit_slurm(epoch, model)
+    submit_slurm(0, "vit_h")
+
+        
