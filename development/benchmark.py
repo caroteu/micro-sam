@@ -17,11 +17,19 @@ https://jiffyclub.github.io/snakeviz/
 2. Generate profile file: `python -m cProfile -o program.prof benchmark.py --model_type vit_h --device cpu`
 3. Visualize profile file: `snakeviz program.prof`
 """
+
 import argparse
 import time
+import sys
+import platform
+from PIL import Image
+import os
+import shutil
 
 import imageio.v3 as imageio
 import micro_sam.instance_segmentation as instance_seg
+from micro_sam.evaluation.instance_segmentation import run_instance_segmentation_inference, InstanceSegmentationWithDecoder
+
 import micro_sam.prompt_based_segmentation as seg
 import micro_sam.util as util
 import numpy as np
@@ -30,150 +38,174 @@ import pandas as pd
 from micro_sam.sample_data import fetch_livecell_example_data
 
 
-def _get_image_and_predictor(model_type, device, checkpoint_path, image_path):
+def delete_files_in_directory(directory):
+    for filename in os.listdir(directory):
+        file_path = os.path.join(directory, filename)
+        try:
+            if os.path.isfile(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path): # Uncomment this if you want to delete subdirectories as well
+                shutil.rmtree(file_path)
+        except Exception as e:
+            #print(f"Failed to delete {file_path}. Reason: {e}")
+            print("Failed to delete")
+
+def convert_tif_to_png(tif_path, png_path):
+    try:
+        # Open the .tif file
+        with Image.open(tif_path) as img:
+            # Save as .png
+            img.save(png_path, format="PNG")
+    except Exception as e:
+        #print(f"Error converting {tif_path} to PNG: {e}")
+        print("Error converting file")
+
+def _get_image_and_predictor(model_type, device, checkpoint_path,image_path):
     #example_data = fetch_livecell_example_data("../examples/data")
-    example_data = image_path
-    image = imageio.imread(example_data)
-    predictor = util.get_sam_model(model_type, device, checkpoint_path=checkpoint_path)
-    return image, predictor
+    images = []
+    image_paths = []
+    for i, filename in enumerate(os.listdir(image_path)):
+        filepath = os.path.join(image_path, filename)
+        convert_tif_to_png(filepath, "example_images/example_image_{}.png".format(i))
+        try:
+            img = imageio.imread(filepath)
+            images.append(img)
+            image_paths.append(filepath)
+        except Exception as e:
+            #print(f"Error reading {filepath}: {e}")
+            print("Error reading filepath")
+    
+    if checkpoint_path.endswith('.pt'):
+        predictor = util.get_custom_sam_model(checkpoint_path, model_type, device)
+    else:
+        predictor = util.get_sam_model(model_type, device, checkpoint_path)
+    
+    return images[:10], image_paths[:10], predictor
 
 
-def _add_result(benchmark_results, name, runtimes, runtimes_wo):
+def _add_result(benchmark_results, name, runtimes, error):
     nres = len(name)
     assert len(name) == len(runtimes)
     res = {
         "benchmark": name,
-        "mean runtime": runtimes,
-        "mean runtime w/o outlier": runtimes_wo
+        "runtimes": runtimes, 
+        "error": error
     }
     tab = pd.DataFrame(res)
     benchmark_results.append(tab)
     return benchmark_results
 
 
-def benchmark_embeddings(image, predictor, n):
+def benchmark_embeddings(images, predictor, n):
     print("Running benchmark_embeddings ...")
     n = 3 if n is None else n
     times = []
     for _ in range(n):
         t0 = time.time()
-        util.precompute_image_embeddings(predictor, image)
+        for image in images:
+            util.precompute_image_embeddings(predictor, image)
         times.append(time.time() - t0)
-    runtime = np.mean(times)
-    runtime_wo = np.mean(times[1:])
-
-    return ["embeddings"], [runtime], [runtime_wo]
+    runtime = np.min(times)
+    error = np.std(times)
 
 
-def benchmark_prompts(image, predictor, n):
+    return ["embeddings"], [runtime], [error]
+
+
+def benchmark_prompts(images, predictor, n):
     print("Running benchmark_prompts ...")
     n = 10 if n is None else n
-    names, runtimes = [], []
 
     np.random.seed(42)
 
-    names, runtimes, runtimes_wo = [], [], []
+    names, runtimes, errors = [], [], []
 
     # from random single point
     times = []
     for _ in range(n):
         t0 = time.time()
-        embeddings = util.precompute_image_embeddings(predictor, image)
-        points = np.array([
-            np.random.randint(0, image.shape[0]),
-            np.random.randint(0, image.shape[1]),
-        ])[None]
-        labels = np.array([1])
-        seg.segment_from_points(predictor, points, labels, embeddings)
+        for image in images:
+            embeddings = util.precompute_image_embeddings(predictor, image)
+            points = np.array([
+                np.random.randint(0, image.shape[0]),
+                np.random.randint(0, image.shape[1]),
+            ])[None]
+            labels = np.array([1])
+            seg.segment_from_points(predictor, points, labels, embeddings)
         times.append(time.time() - t0)
+        
     names.append("prompt-p1n0")
-    runtimes.append(np.mean(times))
-    runtimes_wo.append(np.mean(times[1:]))
+    runtimes.append(np.min(times))
+    errors.append(np.std(times[1:]))
 
-
-    # from random 2p4n
+   # from bounding box
     times = []
     for _ in range(n):
         t0 = time.time()
-        embeddings = util.precompute_image_embeddings(predictor, image)
-        points = np.concatenate([
-            np.random.randint(0, image.shape[0], size=6)[:, None],
-            np.random.randint(0, image.shape[1], size=6)[:, None],
-        ], axis=1)
-        labels = np.array([1, 1, 0, 0, 0, 0])
-        seg.segment_from_points(predictor, points, labels, embeddings)
-        times.append(time.time() - t0)
-    names.append("prompt-p2n4")
-    runtimes.append(np.mean(times))
-    runtimes_wo.append(np.mean(times[1:]))
-
-    # from bounding box
-    times = []
-    for _ in range(n):
-        t0 = time.time()
-        embeddings = util.precompute_image_embeddings(predictor, image)
-        box_size = np.random.randint(20, 100, size=2)
-        box_start = [
-            np.random.randint(0, image.shape[0] - box_size[0]),
-            np.random.randint(0, image.shape[1] - box_size[1]),
-        ]
-        box = np.array([
-            box_start[0], box_start[1],
-            box_start[0] + box_size[0], box_start[1] + box_size[1],
-        ])
-        seg.segment_from_box(predictor, box, embeddings)
+        for image in images:
+            embeddings = util.precompute_image_embeddings(predictor, image)
+            box_size = np.random.randint(20, 100, size=2)
+            box_start = [
+                np.random.randint(0, image.shape[0] - box_size[0]),
+                np.random.randint(0, image.shape[1] - box_size[1]),
+            ]
+            box = np.array([
+                box_start[0], box_start[1],
+                box_start[0] + box_size[0], box_start[1] + box_size[1],
+            ])
+            seg.segment_from_box(predictor, box, embeddings)
         times.append(time.time() - t0)
     names.append("prompt-box")
-    runtimes.append(np.mean(times))
-    runtimes_wo.append(np.mean(times[1:]))
+    runtimes.append(np.min(times))
+    errors.append(np.std(times[1:]))
 
-    return names, runtimes, runtimes_wo
-"""
-    # from bounding box and points
-    times = []
-    for _ in range(n):
-        t0 = time.time()
-        points = np.concatenate([
-            np.random.randint(0, image.shape[0], size=6)[:, None],
-            np.random.randint(0, image.shape[1], size=6)[:, None],
-        ], axis=1)
-        labels = np.array([1, 1, 0, 0, 0, 0])
-        box_size = np.random.randint(20, 100, size=2)
-        box_start = [
-            np.random.randint(0, image.shape[0] - box_size[0]),
-            np.random.randint(0, image.shape[1] - box_size[1]),
-        ]
-        box = np.array([
-            box_start[0], box_start[1],
-            box_start[0] + box_size[0], box_start[1] + box_size[1],
-        ])
-        seg.segment_from_box_and_points(predictor, box, points, labels, embeddings)
-        times.append(time.time() - t0)
-    names.append("prompt-box-and-points")
-    #runtimes.append(np.mean(times))
-    #errors.append(np.std(times)/np.sqrt(n))
-    #runtimes.append(np.min(times))
-    runtimes.append(times)
-"""
+    return names, runtimes, errors
 
-
-def benchmark_amg(image, predictor, n):
-    print("Running benchmark_amg ...")
-    n = 1 if n is None else n
+def benchmark_amg(image_paths, predictor, n):
+    print("Running benchmark amg ...")
+    
     amg = instance_seg.AutomaticMaskGenerator(predictor)
+    prediction_dir = "predictions/"
+    embedding_dir = "embeddings/"
     times = []
     for _ in range(n):
         t0 = time.time()
-        embeddings = util.precompute_image_embeddings(predictor, image)
-        amg.initialize(image, embeddings)
-        amg.generate()
-        times.append(time.time() - t0)
-    runtime = np.mean(times)
-    runtime_wo = np.mean(times[1:])
-    return ["amg"], [runtime], [runtime_wo]
+
+        run_instance_segmentation_inference(
+            amg, image_paths, embedding_dir, prediction_dir)
+        t1 = time.time()
+        times.append(t1-t0)
+        delete_files_in_directory(embedding_dir)
+        delete_files_in_directory(prediction_dir)
+        
+    runtime = np.min(times)
+    error = np.std(times)
+    return ["amg"], [runtime], [error]
+
+def benchmark_ais(image_paths, segmenter, n):
+    print("Running benchmark_ais")
+    prediction_dir = "predictions/"
+    embedding_dir = "embeddings/"
+    times = []
+    n = 1 if n is None else n
+    for _ in range(n):
+        t0 = time.time()
+
+        run_instance_segmentation_inference(
+            segmenter, image_paths, embedding_dir, prediction_dir)
+
+        t1 = time.time()
+        times.append(t1-t0)
+        delete_files_in_directory(embedding_dir)
+        delete_files_in_directory(prediction_dir)
+        
+    runtime = np.min(times)
+    error = np.std(times)
+    return ["ais"], [runtime], [error]
 
 
 def main():
+    print(sys.version)
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", "-d",
                         choices=['cpu', 'cuda', 'mps'],
@@ -187,10 +219,13 @@ def main():
                         help="Skip prompt benchmark test, do not run")
     parser.add_argument("--benchmark_amg", "-a", action="store_false",
                         help="Skip automatic mask generation (amg) benchmark test, do not run")
+    parser.add_argument("--benchmark_ais", "-ai", action="store_false",
+                        help="Skip automatic instance segmentation (ais) benchmark test, do not run")
+    
     parser.add_argument("-n", "--n", type=int, default=None,
                         help="Number of times to repeat benchmark tests")
  
-    parser.add_argument("-i", "--image", help="Path to test image")
+    parser.add_argument("-i", "--image", help="Path to test images")
     parser.add_argument("-c", "--checkpoint", help="Checkpoint path")
     parser.add_argument("-s", "--save_path", help='Path where benchmark results will be saved')
 
@@ -205,20 +240,30 @@ def main():
     print("Running benchmarks for", model_type)
     print("with device:", device)
 
-    image, predictor = _get_image_and_predictor(model_type, device, checkpoint_path, image_path)
+    images, image_paths, predictor = _get_image_and_predictor(model_type, device, checkpoint_path, image_path)
 
     benchmark_results = []
     if args.benchmark_embeddings:
-        name, rt, rt_wo = benchmark_embeddings(image, predictor, args.n)
-        benchmark_results = _add_result(benchmark_results, name, rt, rt_wo)
+        name, rt, err = benchmark_embeddings(images, predictor, args.n)
+        benchmark_results = _add_result(benchmark_results, name, rt, err)
 
     if args.benchmark_prompts:
-        name, rt, rt_wo = benchmark_prompts(image, predictor, args.n)
-        benchmark_results = _add_result(benchmark_results, name, rt, rt_wo)
-        
+        name, rt, err = benchmark_prompts(images, predictor, args.n)
+        benchmark_results = _add_result(benchmark_results, name, rt, err)
+ 
+    if args.benchmark_ais:
+        predictor, decoder = instance_seg.get_custom_sam_model_with_decoder(
+            args.checkpoint, args.model_type
+        )
+        segmenter = InstanceSegmentationWithDecoder(predictor, decoder)
+        name, rt, err = benchmark_ais(image_paths, segmenter, args.n)
+        benchmark_results = _add_result(benchmark_results, name, rt, err)
+
+       
     if args.benchmark_amg:
-        name, rt, rt_wo = benchmark_amg(image, predictor, args.n)
-        benchmark_results = _add_result(benchmark_results, name, rt, rt_wo)
+        name, rt, err = benchmark_amg(image_paths, predictor, args.n)
+        benchmark_results = _add_result(benchmark_results, name, rt, err)
+    
 
     benchmark_results = pd.concat(benchmark_results)
     print(benchmark_results.to_markdown(index=False))

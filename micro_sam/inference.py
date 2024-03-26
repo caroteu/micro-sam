@@ -35,8 +35,9 @@ def batched_inference(
         batch_size: The batch size to use for inference.
         boxes: The box prompts. Array of shape N_PROMPTS x 4.
             The bounding boxes are represented by [MIN_X, MIN_Y, MAX_X, MAX_Y].
-        points: The point prompt coordinates. Array of shape N_PROMPTS x 2.
-            The points are represented by [X, Y].
+        points: The point prompt coordinates. Array of shape N_PROMPTS x 1 x 2.
+            The points are represented by their coordinates [X, Y], which are given
+            in the last dimension.
         point_labels: The point prompt labels. Array of shape N_PROMPTS x 1.
             The labels are either 0 (negative prompt) or 1 (positive prompt).
         multimasking: Whether to predict with 3 or 1 mask.
@@ -122,7 +123,6 @@ def batched_inference(
         # then we need to select the most likely mask (according to the predicted IOU) here.
         if reduce_multimasking and multimasking:
             _, max_index = batch_ious.max(axis=1)
-            # How can this be vectorized???
             batch_masks = torch.cat([batch_masks[i, max_id][None] for i, max_id in enumerate(max_index)]).unsqueeze(1)
             batch_ious = torch.cat([batch_ious[i, max_id][None] for i, max_id in enumerate(max_index)]).unsqueeze(1)
 
@@ -145,6 +145,6 @@ def batched_inference(
     ]
 
     if return_instance_segmentation:
-        masks = mask_data_to_segmentation(masks, image_shape, with_background=False, min_object_size=0)
+        masks = mask_data_to_segmentation(masks, with_background=False, min_object_size=0)
 
     return masks

@@ -68,7 +68,7 @@ def sample_data_image_series():
     # Check the documentation for more information about the
     # add_image_kwargs
     # https://napari.org/stable/api/napari.Viewer.html#napari.Viewer.add_image
-    base_data_directory = os.path.join(get_cache_directory(), 'sample_data')
+    base_data_directory = os.path.join(get_cache_directory(), "sample_data")
     data_directory = fetch_image_series_example_data(base_data_directory)
     fnames = os.listdir(data_directory)
     full_filenames = [os.path.join(data_directory, f) for f in fnames]
@@ -109,7 +109,7 @@ def sample_data_wholeslide():
     # Check the documentation for more information about the
     # add_image_kwargs
     # https://napari.org/stable/api/napari.Viewer.html#napari.Viewer.add_image
-    base_data_directory = os.path.join(get_cache_directory(), 'sample_data')
+    base_data_directory = os.path.join(get_cache_directory(), "sample_data")
     filename = fetch_wholeslide_example_data(base_data_directory)
     data = imageio.imread(filename)
     add_image_kwargs = {"name": "wholeslide"}
@@ -185,7 +185,7 @@ def sample_data_hela_2d():
     # Check the documentation for more information about the
     # add_image_kwargs
     # https://napari.org/stable/api/napari.Viewer.html#napari.Viewer.add_image
-    base_data_directory = os.path.join(get_cache_directory(), 'sample_data')
+    base_data_directory = os.path.join(get_cache_directory(), "sample_data")
     filename = fetch_hela_2d_example_data(base_data_directory)
     data = imageio.imread(filename)
     add_image_kwargs = {"name": "hela_2d"}
@@ -228,7 +228,7 @@ def sample_data_3d():
     # Check the documentation for more information about the
     # add_image_kwargs
     # https://napari.org/stable/api/napari.Viewer.html#napari.Viewer.add_image
-    base_data_directory = os.path.join(get_cache_directory(), 'sample_data')
+    base_data_directory = os.path.join(get_cache_directory(), "sample_data")
     data_directory = fetch_3d_example_data(base_data_directory)
     fnames = os.listdir(data_directory)
     full_filenames = [os.path.join(data_directory, f) for f in fnames]
@@ -260,7 +260,7 @@ def fetch_tracking_example_data(save_directory: Union[str, os.PathLike]) -> str:
     fname = "DIC-C2DH-HeLa.zip"
     pooch.retrieve(
         url="http://data.celltrackingchallenge.net/training-datasets/DIC-C2DH-HeLa.zip",  # 37 MB
-        known_hash="fac24746fa0ad5ddf6f27044c785edef36bfa39f7917da4ad79730a7748787af",
+        known_hash="832fed2d05bb7488cf9c51a2994b75f8f3f53b3c3098856211f2d39023c34e1a",
         fname=fname,
         path=save_directory,
         progressbar=True,
@@ -339,7 +339,7 @@ def synthetic_data(shape, seed=None):
     ndim = len(shape)
     assert ndim in (2, 3)
     image_shape = shape if ndim == 2 else shape[1:]
-    image = binary_blobs(length=image_shape[0], blob_size_fraction=0.05, volume_fraction=0.15, seed=seed)
+    image = binary_blobs(length=image_shape[0], blob_size_fraction=0.05, volume_fraction=0.15, rng=seed)
 
     if image_shape[1] != image_shape[0]:
         image = resize(image, image_shape, order=0, anti_aliasing=False, preserve_range=True).astype(image.dtype)
@@ -348,6 +348,7 @@ def synthetic_data(shape, seed=None):
         image = np.stack([image] * nz)
 
     segmentation = label(image)
+    image = image.astype("uint8") * 255
     return image, segmentation
 
 

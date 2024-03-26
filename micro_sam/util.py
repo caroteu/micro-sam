@@ -28,6 +28,12 @@ import time
 
 
 try:
+    import xxhash
+    HAS_XXH128 = hasattr(xxhash, "xxh128")
+except ImportError:
+    HAS_XXH128 = False
+
+try:
     from napari.utils import progress as tqdm
 except ImportError:
     from tqdm import tqdm
@@ -52,8 +58,8 @@ def get_cache_directory() -> None:
 
     Users can set the MICROSAM_CACHEDIR environment variable for a custom cache directory.
     """
-    default_cache_directory = os.path.expanduser(pooch.os_cache('micro_sam'))
-    cache_directory = Path(os.environ.get('MICROSAM_CACHEDIR', default_cache_directory))
+    default_cache_directory = os.path.expanduser(pooch.os_cache("micro_sam"))
+    cache_directory = Path(os.environ.get("MICROSAM_CACHEDIR", default_cache_directory))
     return cache_directory
 
 
@@ -61,7 +67,8 @@ def get_cache_directory() -> None:
 # Functionality for model download and export
 #
 
-def microsam_cachedir():
+
+def microsam_cachedir() -> None:
     """Return the micro-sam cache directory.
 
     Returns the top level cache directory for micro-sam models and sample data.
@@ -69,7 +76,7 @@ def microsam_cachedir():
     Every time this function is called, we check for any user updates made to
     the MICROSAM_CACHEDIR os environment variable since the last time.
     """
-    cache_directory = os.environ.get('MICROSAM_CACHEDIR') or pooch.os_cache('micro_sam')
+    cache_directory = os.environ.get("MICROSAM_CACHEDIR") or pooch.os_cache("micro_sam")
     return cache_directory
 
 
@@ -80,22 +87,45 @@ def models():
     so any user changes to the default micro-sam cache directory location
     are respected.
     """
+
+    # Provide hashes in both xxh128 (fast, but not cryptographically secure),
+    # and as sha256 (as a fallback) to validate if the file has been correctly
+    # downloaded.
+    # https://github.com/computational-cell-analytics/micro-sam/issues/283
+    # To generate the xxh128 hash
+    #
+    #     xxh128sum filename
+    #
+    # You may need to install xxhash with conda or your system package manager.
+    registry_sha256 = {
+        # the default segment anything models
+        "vit_h": "sha256:a7bf3b02f3ebf1267aba913ff637d9a2d5c33d3173bb679e46d9f338c26f262e",
+        "vit_l": "sha256:3adcc4315b642a4d2101128f611684e8734c41232a17c648ed1693702a49a622",
+        "vit_b": "sha256:ec2df62732614e57411cdcf32a23ffdf28910380d03139ee0f4fcbe91eb8c912",
+        # the model with vit tiny backend fom https://github.com/ChaoningZhang/MobileSAM
+        "vit_t": "sha256:6dbb90523a35330fedd7f1d3dfc66f995213d81b29a5ca8108dbcdd4e37d6c2f",
+        # first version of finetuned models on zenodo
+        "vit_b_lm": "sha256:e8f5feb1ad837a7507935409c7f83f7c8af11c6e39cfe3df03f8d3bd4a358449",
+        "vit_b_em_organelles": "sha256:8fabbe38a427a0c91bbe6518a5c0f103f36b73e6ee6c86fbacd32b4fc66294b4",
+        "vit_b_em_boundaries": "sha256:d87348b2adef30ab427fb787d458643300eb30624a0e808bf36af21764705f4f",
+    }
+    registry_xxh128 = {
+        # the default segment anything models
+        "vit_h": "xxh128:97698fac30bd929c2e6d8d8cc15933c2",
+        "vit_l": "xxh128:a82beb3c660661e3dd38d999cc860e9a",
+        "vit_b": "xxh128:6923c33df3637b6a922d7682bfc9a86b",
+        # the model with vit tiny backend fom https://github.com/ChaoningZhang/MobileSAM
+        "vit_t": "xxh128:8eadbc88aeb9d8c7e0b4b60c3db48bd0",
+        # first version of finetuned models on zenodo
+        "vit_b_lm": "xxh128:6b061eb8684d9d5f55545330d6dce50d",
+        "vit_b_em_organelles": "xxh128:3919c2b761beba7d3f4ece342c9f5369",
+        "vit_b_em_boundaries": "xxh128:3099fe6339f5be91ca84db889db1909f",
+    }
+
     models = pooch.create(
         path=os.path.join(microsam_cachedir(), "models"),
         base_url="",
-        registry={
-            # the default segment anything models
-            "vit_h": "a7bf3b02f3ebf1267aba913ff637d9a2d5c33d3173bb679e46d9f338c26f262e",
-            "vit_l": "3adcc4315b642a4d2101128f611684e8734c41232a17c648ed1693702a49a622",
-            "vit_b": "ec2df62732614e57411cdcf32a23ffdf28910380d03139ee0f4fcbe91eb8c912",
-            # the model with vit tiny backend fom https://github.com/ChaoningZhang/MobileSAM
-            "vit_t": "6dbb90523a35330fedd7f1d3dfc66f995213d81b29a5ca8108dbcdd4e37d6c2f",
-            # first version of finetuned models on zenodo
-            "vit_h_lm": "9a65ee0cddc05a98d60469a12a058859c89dc3ea3ba39fed9b90d786253fbf26",
-            "vit_b_lm": "5a59cc4064092d54cd4d92cd967e39168f3760905431e868e474d60fe5464ecd",
-            "vit_h_em": "ae3798a0646c8df1d4db147998a2d37e402ff57d3aa4e571792fbb911d8a979c",
-            "vit_b_em": "c04a714a4e14a110f0eec055a65f7409d54e6bf733164d2933a0ce556f7d6f81",
-        },
+        registry=registry_xxh128 if HAS_XXH128 else registry_sha256,
         # Now specify custom URLs for some of the files in the registry.
         urls={
             # the default segment anything models
@@ -105,10 +135,9 @@ def models():
             # the model with vit tiny backend fom https://github.com/ChaoningZhang/MobileSAM
             "vit_t": "https://owncloud.gwdg.de/index.php/s/TuDzuwVDHd1ZDnQ/download",
             # first version of finetuned models on zenodo
-            "vit_h_lm": "https://zenodo.org/record/8250299/files/vit_h_lm.pth?download=1",
-            "vit_b_lm": "https://zenodo.org/record/8250281/files/vit_b_lm.pth?download=1",
-            "vit_h_em": "https://zenodo.org/record/8250291/files/vit_h_em.pth?download=1",
-            "vit_b_em": "https://zenodo.org/record/8250260/files/vit_b_em.pth?download=1",
+            "vit_b_lm": "https://zenodo.org/records/10524791/files/vit_b_lm.pth?download=1",
+            "vit_b_em_organelles": "https://zenodo.org/records/10524828/files/vit_b_em_organelles.pth?download=1",
+            "vit_b_em_boundaries": "https://zenodo.org/records/10524894/files/vit_b_em_boundaries.pth?download=1",
         },
     )
     return models
@@ -481,9 +510,12 @@ def _precompute_2d(input_, predictor, save_path, tile_shape, halo):
     f = zarr.open(save_path, "a")
 
     use_tiled_prediction = tile_shape is not None
+    set_embeddings = False
+
     if "input_size" in f.attrs:  # the embeddings have already been precomputed
         features = f["features"][:] if tile_shape is None else f["features"]
         original_size, input_size = f.attrs["original_size"], f.attrs["input_size"]
+        set_embeddings = not use_tiled_prediction
 
     elif use_tiled_prediction:  # the embeddings have not been computed yet and we use tiled prediction
         features = _precompute_tiled_2d(predictor, input_, tile_shape, halo, f)
@@ -501,6 +533,11 @@ def _precompute_2d(input_, predictor, save_path, tile_shape, halo):
     image_embeddings = {
         "features": features, "input_size": input_size, "original_size": original_size,
     }
+
+    # Make sure that the embeddings are set if we load normal 2d embeddings.
+    if set_embeddings:
+        set_precomputed(predictor, image_embeddings)
+
     return image_embeddings
 
 
@@ -676,7 +713,7 @@ def set_precomputed(
     device = predictor.device
     features = image_embeddings["features"]
 
-    assert features.ndim in (4, 5)
+    assert features.ndim in (4, 5), f"{features.ndim}"
     if features.ndim == 5 and i is None:
         raise ValueError("The data is 3D so an index i is needed.")
     elif features.ndim == 4 and i is not None:
