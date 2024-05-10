@@ -7,6 +7,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 PROJECT_ROOT = "/scratch/projects/nim00007/sam/experiments"
+MODEL_NAMES = {"vit_t": "ViT-T", "vit_b": "ViT-B", "vit_l": "ViT-L", "vit_h": "ViT-H"}
 EXPERIMENT_ROOT = "/scratch/usr/nimcarot/sam/experiments/livecell"
 
 def gather_livecell_results(model_type, experiment_name, benchmark_choice):
@@ -55,17 +56,18 @@ def gather_livecell_results(model_type, experiment_name, benchmark_choice):
     return amg_score, ais_score, ib_score, ip_score, cellpose_res
 
 
-def get_barplots(name, ax, ib_data, ip_data, amg, cellpose, ais=None):
-    sns.barplot(x="iteration", y="result", hue="name", data=ib_data, ax=ax, palette=["#7CCBA2"])
-    all_containers = ax.containers[-1]
-    for k in range(len(all_containers)):
-        ax.patches[k].set_hatch('///')
-        ax.patches[k].set_edgecolor('k')
+def get_barplots(name, ax, ib_data, ip_data, amg, cellpose, model, ais=None):
+    data = pd.concat([ib_data, ip_data], ignore_index=True)
+    sns.barplot(x="iteration", y="result", hue="name", data=data, ax=ax, palette=["#7CCBA2", '#089099'])
+    #äall_containers = ax.containers[-1]
+    #for k in range(len(all_containers)):
+    #    ax.patches[k].set_hatch('///')
+    #    ax.patches[k].set_edgecolor('k')
 
-    sns.barplot(x="iteration", y="result", hue="name", data=ip_data, ax=ax, palette=["#089099"])
+    #sns.barplot(x="iteration", y="result", hue="name", data=ip_data, ax=ax, palette=["#089099"])
     ax.set(xlabel=None, ylabel=None)
     ax.legend(title="Settings", bbox_to_anchor=(1, 1))
-    ax.title.set_text(name)
+    ax.title.set_text(f"{name} {model}")
 
     ax.axhline(y=amg, label="amg", color="#7c1D6F")
     if ais is not None:
@@ -73,14 +75,16 @@ def get_barplots(name, ax, ib_data, ip_data, amg, cellpose, ais=None):
     ax.axhline(y=cellpose, label="cellpose", color="#E31A1C")
 
 
-def plot_for_livecell(benchmark_choice):
-    fig, ax = plt.subplots(1, 2, figsize=(20, 10), sharex="col", sharey="row")
-    amg_vanilla, _, ib_vanilla, ip_vanilla, cellpose_res = gather_livecell_results("vit_h", "vanilla", benchmark_choice)
-    get_barplots("Default SAM", ax[0], ib_vanilla, ip_vanilla, amg_vanilla, cellpose_res)
 
-    (amg_specialist, ais_specialist,
-     ib_specialist, ip_specialist, cellpose_res) = gather_livecell_results("vit_h", "specialist", benchmark_choice)
-    get_barplots("Finetuned SAM", ax[1], ib_specialist, ip_specialist, amg_specialist, cellpose_res, ais_specialist)
+def plot_for_livecell(benchmark_choice):
+    fig, ax = plt.subplots(4, 2, figsize=(20, 30), sharex="col", sharey="row")
+    for i, m in enumerate(["vit_t", "vit_b", "vit_l", "vit_h"]):
+        amg_vanilla, _, ib_vanilla, ip_vanilla, cellpose_res = gather_livecell_results(m, "vanilla", benchmark_choice)
+        get_barplots("Default SAM", ax[i][0], ib_vanilla, ip_vanilla, amg_vanilla, cellpose_res, MODEL_NAMES[m])
+
+        (amg_specialist, ais_specialist,
+         ib_specialist, ip_specialist, cellpose_res) = gather_livecell_results(m, "specialist", benchmark_choice)
+        get_barplots("Finetuned SAM", ax[i][1], ib_specialist, ip_specialist, amg_specialist, cellpose_res, MODEL_NAMES[m], ais_specialist)
 
     # here, we remove the legends for each subplot, and get one common legend for all
     all_lines, all_labels = [], []
@@ -92,16 +96,16 @@ def plot_for_livecell(benchmark_choice):
                 all_labels.append(label)
         ax.get_legend().remove()
 
-    fig.legend(all_lines, all_labels, bbox_to_anchor=(0.11, 0.9))
+    fig.legend(all_lines, all_labels, bbox_to_anchor=(0.11, 0.98), fontsize=13)
 
-    fig.text(0.5, 0.01, 'Iterative Prompting', ha='center', fontdict={"size": 22})
-    fig.text(0.01, 0.5, 'Segmentation Quality', va='center', rotation='vertical', fontdict={"size": 22})
+    fig.text(0.5, 0.01, 'Iterative Prompting', ha='center', fontdict={"size": 23})
+    fig.text(0.01, 0.5, 'Segmentation Quality', va='center', rotation='vertical', fontdict={"size": 23})
 
     plt.show()
     plt.tight_layout()
-    plt.subplots_adjust(top=0.90, right=0.95, left=0.05, bottom=0.07)
-    fig.suptitle("LiveCELL", fontsize=20)
-    plt.savefig("livecell.png", transparent=True)
+    plt.subplots_adjust(top=0.90, right=0.97, left=0.05, bottom=0.03)
+    fig.suptitle("LiveCELL", fontsize=26)
+    plt.savefig("livecell.pdf")
     plt.close()
 
 
