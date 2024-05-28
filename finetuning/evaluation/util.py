@@ -5,7 +5,7 @@ from glob import glob
 
 from torch_em.data import datasets
 
-from micro_sam.evaluation import get_predictor
+from micro_sam.util import get_sam_model
 from micro_sam.evaluation.livecell import _get_livecell_paths
 
 
@@ -34,21 +34,22 @@ FILE_SPECS = {
 # good spot to track all datasets we use atm
 DATASETS = [
     # in-domain (LM)
-    "tissuenet", "deepbacs", "plantseg/root", "livecell", "neurips-cell-seg",
+    "tissuenet/one_chan", "tissuenet/multi_chan", "deepbacs", "plantseg/root", "livecell",
+    "neurips-cell-seg/all", "neurips-cell-seg/tuning", "neurips-cell-seg/self",
     # out-of-domain (LM)
-    "covid_if", "plantseg/ovules", "hpa", "lizard", "mouse-embryo", "ctc/hela_samples",
+    "covid_if", "plantseg/ovules", "hpa", "lizard", "mouse-embryo", "ctc/hela_samples", "dynamicnuclearnet", "pannuke",
     # organelles (EM)
     #   - in-domain
     "mitoem/rat", "mitoem/human", "platynereis/nuclei",
     #   - out-of-domain
     "mitolab/c_elegans", "mitolab/fly_brain", "mitolab/glycolytic_muscle", "mitolab/hela_cell",
     "mitolab/lucchi_pp", "mitolab/salivary_gland", "mitolab/tem", "lucchi", "nuc_mm/mouse",
-    "nuc_mm/zebrafish", "uro_cell", "sponge_em", "platynereis/cilia",
+    "nuc_mm/zebrafish", "uro_cell", "sponge_em", "platynereis/cilia", "vnc", "asem/mito", "asem/er",
     # boundaries - EM
     #   - in-domain
     "cremi", "platynereis/cells",
     #   - out-of-domain
-    "axondeepseg", "snemi", "isbi"
+    "axondeepseg", "snemi", "isbi",
 ]
 
 
@@ -83,8 +84,7 @@ def get_model(model_type, ckpt):
     custom_model = True
     if ckpt is None:
         ckpt = VANILLA_MODELS[model_type]
-        custom_model = False
-    predictor = get_predictor(ckpt, model_type, is_custom_model=custom_model)
+    predictor = get_sam_model(model_type=model_type, checkpoint_path=ckpt)
     return predictor
 
 
@@ -222,8 +222,11 @@ def get_default_arguments():
     )
     parser.add_argument("-c", "--checkpoint", type=none_or_str, required=True, default=None)
     parser.add_argument("-e", "--experiment_folder", type=str, required=True)
-    parser.add_argument("-d", "--dataset", type=str, required=True)
+    parser.add_argument("-d", "--dataset", type=str, default=None)
     parser.add_argument("--box", action="store_true", help="If passed, starts with first prompt as box")
+    parser.add_argument(
+        "--use_masks", action="store_true", help="To use logits masks for iterative prompting."
+    )
     args = parser.parse_args()
     return args
 

@@ -34,6 +34,8 @@ def run_one_setup(all_dataset_list, all_model_list, all_experiment_set_list, roi
 
                 run_specific_experiment(dataset_name, model_type, experiment_set, roi, specific_script)
 
+        breakpoint()  # check per dataset briefly
+
 
 def for_all_lm(specific_script):
     # let's run for in-domain
@@ -79,9 +81,50 @@ def for_all_em(specific_script):
     )
 
 
+def for_livecell(specific_script):
+    # let's run for livecell
+    run_one_setup(
+        all_dataset_list=["livecell"],
+        all_model_list=ALl_MODELS,
+        all_experiment_set_list=["vanilla", "generalist", "specialist"],
+        roi="lm",
+        specific_script=specific_script
+    )
+
+
+def for_em_benchmarking(specific_script):
+    # let's run for em
+    run_one_setup(
+        all_dataset_list=[
+            "mitolab/c_elegans", "mitolab/fly_brain", "mitolab/glycolytic_muscle",
+            "mitolab/hela_cell", "mitolab/tem", "lucchi",
+        ],
+        all_model_list=ALl_MODELS,
+        all_experiment_set_list=["vanilla", "generalist"],
+        roi="organelles",
+        specific_script=specific_script
+    )
+
+
+def for_covid_if(specific_script):
+    # let's run for covid if
+    run_one_setup(
+        all_dataset_list=["covid_if"],
+        all_model_list=ALl_MODELS,
+        all_experiment_set_list=["vanilla", "generalist"],
+        roi="lm",
+        specific_script=specific_script
+    )
+
+
 def main(args):
-    for_all_lm(specific_script=args.specific_script)
-    for_all_em(specific_script=args.specific_script)
+    # for_all_lm(specific_script=args.specific_script)
+    # for_all_em(specific_script=args.specific_script)
+
+    # for_livecell(specific_script=args.specific_script)
+    # for_em_benchmarking(specific_script=args.specific_script)
+
+    for_covid_if(specific_script=args.specific_script)
 
 
 if __name__ == "__main__":

@@ -8,8 +8,11 @@ import torch
 from segment_anything.utils.transforms import ResizeLongestSide
 
 from ..prompt_generators import PointAndBoxPromptGenerator
-from ..util import get_centers_and_bounding_boxes, get_sam_model, segmentation_to_one_hot, get_device
-from .trainable_sam import TrainableSAM
+from ..util import (
+    get_centers_and_bounding_boxes, get_sam_model, get_device,
+    segmentation_to_one_hot, _DEFAULT_MODEL,
+)
+from .trainable_sam import TrainableSAM, LoRA_Sam
 
 from torch_em.transform.label import PerObjectDistanceTransform
 from torch_em.transform.raw import normalize_percentile, normalize
@@ -25,11 +28,21 @@ def identity(x):
     return x
 
 
+def require_8bit(x):
+    """Transformation to require 8bit input data range (0-255).
+    """
+    if x.max() < 1:
+        x = x * 255
+    return x
+
+
 def get_trainable_sam_model(
-    model_type: str = "vit_h",
+    model_type: str = _DEFAULT_MODEL,
     device: Optional[Union[str, torch.device]] = None,
     checkpoint_path: Optional[Union[str, os.PathLike]] = None,
     freeze: Optional[List[str]] = None,
+    return_state: bool = False,
+    get_lora: bool = False,
 ) -> TrainableSAM:
     """Get the trainable sam model.
 
@@ -41,13 +54,16 @@ def get_trainable_sam_model(
         checkpoint_path: Path to a custom checkpoint from which to load the model weights.
         freeze: Specify parts of the model that should be frozen, namely: image_encoder, prompt_encoder and mask_decoder
             By default nothing is frozen and the full model is updated.
+        return_state: Whether to return the full checkpoint state.
 
     Returns:
         The trainable segment anything model.
     """
     # set the device here so that the correct one is passed to TrainableSAM below
     device = get_device(device)
-    _, sam = get_sam_model(model_type=model_type, device=device, checkpoint_path=checkpoint_path, return_sam=True)
+    _, sam, state = get_sam_model(
+        model_type=model_type, device=device, checkpoint_path=checkpoint_path, return_sam=True, return_state=True
+    )
 
     # freeze components of the model if freeze was passed
     # ideally we would want to add components in such a way that:
@@ -65,8 +81,14 @@ def get_trainable_sam_model(
                 if name.startswith(f"{freeze}"):
                     param.requires_grad = False
 
+    if get_lora:  # overwrites the SAM model by freezing the backbone and allow low rank adaption to attention layers
+        sam = LoRA_Sam(sam, rank=4).sam
+
     # convert to trainable sam
     trainable_sam = TrainableSAM(sam, device)
+
+    if return_state:
+        return trainable_sam, state
     return trainable_sam
 
 
