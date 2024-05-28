@@ -209,7 +209,7 @@ def get_sam_model(
     device: Optional[Union[str, torch.device]] = None,
     checkpoint_path: Optional[Union[str, os.PathLike]] = None,
     return_sam: bool = False,
-    use_fast_sam: bool = False,
+    use_fast_sam: bool = True,
 ) -> SamPredictor:
     r"""Get the SegmentAnything Predictor.
 
@@ -337,7 +337,7 @@ def get_custom_sam_model(
     custom_pickle.Unpickler = _CustomUnpickler
 
     device = get_device(device)
-    sam = sam_model_registry[model_type]()
+    sam = sam_model_fast_registry[model_type]()
 
     # load the model state, ignoring any attributes that can't be found by pickle
     state = torch.load(checkpoint_path, map_location=device, pickle_module=custom_pickle)

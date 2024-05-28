@@ -47,8 +47,7 @@ def delete_files_in_directory(directory):
             elif os.path.isdir(file_path): # Uncomment this if you want to delete subdirectories as well
                 shutil.rmtree(file_path)
         except Exception as e:
-            #print(f"Failed to delete {file_path}. Reason: {e}")
-            print("Failed to delete")
+            print(f"Failed to delete {file_path}. Reason: {e}")
 
 def convert_tif_to_png(tif_path, png_path):
     try:
@@ -57,11 +56,9 @@ def convert_tif_to_png(tif_path, png_path):
             # Save as .png
             img.save(png_path, format="PNG")
     except Exception as e:
-        #print(f"Error converting {tif_path} to PNG: {e}")
-        print("Error converting file")
+        print(f"Error converting {tif_path} to PNG: {e}")
 
 def _get_image_and_predictor(model_type, device, checkpoint_path,image_path):
-    #example_data = fetch_livecell_example_data("../examples/data")
     images = []
     image_paths = []
     for i, filename in enumerate(os.listdir(image_path)):
@@ -72,13 +69,12 @@ def _get_image_and_predictor(model_type, device, checkpoint_path,image_path):
             images.append(img)
             image_paths.append(filepath)
         except Exception as e:
-            #print(f"Error reading {filepath}: {e}")
-            print("Error reading filepath")
+            print(f"Error reading {filepath}: {e}")
     
     if checkpoint_path.endswith('.pt'):
         predictor = util.get_custom_sam_model(checkpoint_path, model_type, device)
     else:
-        predictor = util.get_sam_model(model_type, device, checkpoint_path)
+        predictor = util.get_sam_model(model_type, device, checkpoint_path, use_fast_sam=True)
     
     return images[:10], image_paths[:10], predictor
 
