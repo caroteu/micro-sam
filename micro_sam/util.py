@@ -9,6 +9,7 @@ import warnings
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Tuple, Union
+from torch.nn.parameter import Parameter
 
 import imageio.v3 as imageio
 import numpy as np
@@ -252,6 +253,7 @@ def _load_checkpoint(checkpoint_path):
     custom_pickle.Unpickler = _CustomUnpickler
 
     state = torch.load(checkpoint_path, map_location="cpu", pickle_module=custom_pickle)
+
     if "model_state" in state:
         # Copy the model weights from torch_em's training format.
         model_state = state["model_state"]
@@ -340,21 +342,29 @@ def get_sam_model(
     abbreviated_model_type = model_type[:5]
     if abbreviated_model_type not in _MODEL_TYPES:
         raise ValueError(f"Invalid model_type: {abbreviated_model_type}. Expect one of {_MODEL_TYPES}")
+
     
-    if abbreviated_model_type == "vit_t":
+    if abbreviated_model_type == "vit_t" and not VIT_T_SUPPORT:
         raise RuntimeError(
-            "Vit-t is not supported with segment_anything_fast"
+            "mobile_sam is required for the vit-tiny."
+            "You can install it via 'pip install git+https://github.com/ChaoningZhang/MobileSAM.git'"
         )
-    
-    #if abbreviated_model_type == "vit_t" and not VIT_T_SUPPORT:
-    #    raise RuntimeError(
-    #        "mobile_sam is required for the vit-tiny."
-    #        "You can install it via 'pip install git+https://github.com/ChaoningZhang/MobileSAM.git'"
-    #    )
 
     state, model_state = _load_checkpoint(checkpoint_path)
     sam = sam_model_registry[abbreviated_model_type]()
-    sam.load_state_dict(model_state)
+
+    # change the state dict such that it matches sam's state dict
+    new_state_dict = model_state.copy()
+    for k, v in model_state.items():
+        if "image_encoder.blocks." in k and "attn.qkv.qkv" in k:
+            # Create new key with additional "qkv"
+            sam_key = k.replace(".qkv.qkv", ".qkv")
+            new_state_dict[sam_key] = new_state_dict.pop(k)
+        elif k not in list(sam.state_dict().keys()):
+            new_state_dict.pop(k)
+
+
+    sam.load_state_dict(new_state_dict)
     sam.to(device=device)
 
     predictor = SamPredictor(sam)
@@ -378,7 +388,7 @@ def get_sam_model(
 def export_custom_sam_model(
     checkpoint_path: Union[str, os.PathLike],
     model_type: str,
-    save_path: Union[str, os.PathLike],
+    save_path: Union[str, os.PathLike]
 ) -> None:
     """Export a finetuned segment anything model to the standard model format.
 
@@ -389,15 +399,18 @@ def export_custom_sam_model(
         model_type: The SegmentAnything model type corresponding to the checkpoint (vit_h, vit_b, vit_l or vit_t).
         save_path: Where to save the exported model.
     """
-    _, state = get_sam_model(
+    sam, state = get_sam_model(
         model_type=model_type, checkpoint_path=checkpoint_path, return_state=True, device="cpu",
     )
     model_state = state["model_state"]
     prefix = "sam."
+        
     model_state = OrderedDict(
         [(k[len(prefix):] if k.startswith(prefix) else k, v) for k, v in model_state.items()]
     )
     torch.save(model_state, save_path)
+
+ 
 
 
 def get_model_names() -> Iterable:
