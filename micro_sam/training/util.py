@@ -43,6 +43,7 @@ def get_trainable_sam_model(
     freeze: Optional[List[str]] = None,
     return_state: bool = False,
     get_lora: bool = False,
+    rank: int = 4
 ) -> TrainableSAM:
     """Get the trainable sam model.
 
@@ -82,7 +83,7 @@ def get_trainable_sam_model(
                     param.requires_grad = False
 
     if get_lora:  # overwrites the SAM model by freezing the backbone and allow low rank adaption to attention layers
-        sam = LoRA_Sam(sam, rank=4).sam
+        sam = LoRA_Sam(sam, rank=rank).sam
 
     # convert to trainable sam
     trainable_sam = TrainableSAM(sam, device)

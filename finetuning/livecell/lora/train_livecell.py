@@ -70,7 +70,7 @@ def finetune_livecell(args):
 
     # training settings:
     model_type = args.model_type
-    checkpoint_path = None  # override this to start training from a custom checkpoint
+    checkpoint_path = args.checkpoint_path  # override this to start training from a custom checkpoint
     patch_shape = (520, 704)  # the patch shape for training
     n_objects_per_batch = 25  # this is the number of objects per batch that will be sampled
     freeze_parts = args.freeze  # override this to freeze different parts of the model
@@ -82,6 +82,7 @@ def finetune_livecell(args):
         checkpoint_path=checkpoint_path,
         freeze=freeze_parts,
         get_lora=True,
+        rank=args.rank
     )
     model.to(device)
 
@@ -108,7 +109,7 @@ def finetune_livecell(args):
         if not name.startswith("encoder"):
             joint_model_params.append(params)
 
-    optimizer = torch.optim.Adam(joint_model_params, lr=1e-5)
+    optimizer = torch.optim.AdamW(joint_model_params, lr=5e-5)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.9, patience=10)
     train_loader, val_loader = get_dataloaders(patch_shape=patch_shape, data_path=args.input_path)
 
@@ -139,7 +140,7 @@ def finetune_livecell(args):
     trainer.fit(args.iterations)
     if args.export_path is not None:
         checkpoint_path = os.path.join(
-            "" if args.save_root is None else args.save_root, "checkpoints", args.name, "best.pt"
+            "" if args.save_root is None else args.save_root, "checkpoints", "livecell_lora", "best.pt"
         )
         export_custom_sam_model(
             checkpoint_path=checkpoint_path,
@@ -164,7 +165,7 @@ def main():
     )
     parser.add_argument(
         "--iterations", type=int, default=int(1e4),
-        help="For how many iterations should the model be trained? By default 100k."
+        help="For how many iterations should the model be trained?."
     )
     parser.add_argument(
         "--export_path", "-e",
@@ -173,6 +174,14 @@ def main():
     parser.add_argument(
         "--freeze", type=str, nargs="+", default=None,
         help="Which parts of the model to freeze for finetuning."
+    )
+    parser.add_argument(
+        "--checkpoint_path", "-c", type=str, default=None,
+        help="The path to a custom checkpoint to start training from."
+    )
+    parser.add_argument(
+        "--rank", type=int, default=4,
+        help="The rank used in LoRA finetuning."
     )
     args = parser.parse_args()
     finetune_livecell(args)

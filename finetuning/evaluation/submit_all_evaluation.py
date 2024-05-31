@@ -23,7 +23,7 @@ def write_batch_script(
 #SBATCH -t 4-00:00:00
 #SBATCH -p grete:shared
 #SBATCH -G A100:1
-#SBATCH -A gzz0001
+#SBATCH -A nim00007
 #SBATCH --constraint=80gb
 #SBATCH --qos=96h
 #SBATCH --job-name={inference_setup}
@@ -112,7 +112,7 @@ def get_checkpoint_path(experiment_set, dataset_name, model_type, region):
         if dataset_name.startswith("tissuenet"):
             dataset_name = "tissuenet"
 
-        checkpoint = f"/scratch/usr/nimanwai/micro-sam/checkpoints/{model_type}/{dataset_name}_sam/best.pt"
+        checkpoint = f"/scratch/usr/nimcarot/micro-sam/sam/checkpoints/vit_b_livecell_lora.pt"
 
     elif experiment_set == "vanilla":
         checkpoint = None
@@ -222,3 +222,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     main(args)
+
+
+# start evaluation with
+# python submit_all_evaluation.py -d livecell -m vit_b -e specialist -e /scratch/usr/nimcarot/sam/experiments/lora/
