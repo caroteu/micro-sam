@@ -8,36 +8,40 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 
-EXPERIMENT_ROOT = "/scratch/usr/nimcarot/sam/experiments/lora"
+EXPERIMENT_ROOT = "/scratch/usr/nimcarot/sam/experiments/LoRA"
 PROJECT_ROOT = "/scratch/projects/nim00007/sam/experiments/"
 
 
 TOP_BAR_COLOR, BOTTOM_BAR_COLOR = "#F0746E", "#089099"
 
-ALL_MODELS = ["full_ft", "lora"]
+ALL_MODELS = {
+    "default": "Vanilla", 
+    "full_ft": "Full Finetuning", 
+    "rank1": "Rank 1",
+    "rank2": "Rank 2",
+    "rank4": "Rank 4",
+    "rank8": "Rank 8",
+    "rank16": "Rank 16"
+}
+
 MODEL_NAME_MAP = {
     "vit_b": "ViT Base",
     "vit_l": "ViT Large",
     "vit_h": "ViT Huge"
 }
-FIG_ASPECT = (30, 15)
+FIG_ASPECT = (30, 20)
 
 plt.rcParams.update({'font.size': 30})
 
 
 def gather_livecell_results(type):
-
-    if type=="full_ft":
-        experiment_name = "full_finetuning"
-    else:
-        experiment_name = ""
-
+    if type=="default" or type=="full_ft":
+        type = "rank1"
     result_paths = glob(
         os.path.join(
-            EXPERIMENT_ROOT, experiment_name, "results", "*"
+            EXPERIMENT_ROOT, type, "results", "*"
         )
     )
-
     amg_score, ais_score, ib_score, ip_score = None, None, None, None
     for result_path in sorted(result_paths):
         if os.path.split(result_path)[-1].startswith("grid_search_"):
@@ -109,18 +113,19 @@ def get_barplots(name, ax, ib_data, ip_data, amg, cellpose, ais=None, get_ylabel
 
 def plot_for_livecell():
 
-    fig, ax = plt.subplots(1, 2, figsize=FIG_ASPECT, sharex=True, sharey=True)
-    amg_full, ais_full, ib_full, ip_full, cellpose_res = gather_livecell_results("full_ft")
-    
-    get_barplots("Full Finetuning", ax[0], ib_full, ip_full, amg_full, cellpose_res, ais_full)
+    fig, ax = plt.subplots(2, 4, figsize=FIG_ASPECT, sharex=False, sharey=True)
 
-    amg, ais, ib, ip, cellpose_res = gather_livecell_results("lora")
-    
-    get_barplots("LoRA Finetuning", ax[1], ib, ip, amg ,cellpose_res, ais, get_ylabel=False)
+
+    for i, experiment in enumerate(ALL_MODELS):
+        if experiment == "default":
+            amg, _, ib, ip, cellpose_res = gather_livecell_results(experiment)
+        else:
+            amg, ais, ib, ip, cellpose_res = gather_livecell_results(experiment)
+        get_barplots(ALL_MODELS[experiment], ax[i//4][i%4], ib, ip, amg, cellpose_res, ais, get_ylabel=(i%4==0))
 
     # here, we remove the legends for each subplot, and get one common legend for all
     all_lines, all_labels = [], []
-    for ax in fig.axes:
+    for ax in fig.axes[:7]:
         lines, labels = ax.get_legend_handles_labels()
         for line, label in zip(lines, labels):
             if label not in all_labels:
@@ -128,15 +133,17 @@ def plot_for_livecell():
                 all_labels.append(label)
         ax.get_legend().remove()
 
-    fig.legend(all_lines, all_labels, loc="upper left", bbox_to_anchor=(0.06, 0.94))
+    fig.legend(all_lines, all_labels, loc="lower right", bbox_to_anchor=(0.92, 0.2))
+    fig.axes[7].axis('off')
+
 
     ax.set_yticks(np.linspace(0.1, 0.8, 8))
 
     plt.show()
     plt.tight_layout()
     # fig.suptitle(MODEL_NAME_MAP[model_choice], fontsize=36, x=0.54, y=0.9)
-    # plt.subplots_adjust(right=0.95, left=0.13, bottom=0.05)
-    _path = "livecell_lora.svg" 
+    plt.subplots_adjust(right=0.95, left=0.1, top=0.9, bottom=0.1)
+    _path = "livecell_lora_rank.svg" 
     plt.savefig(_path)
     plt.savefig(Path(_path).with_suffix(".pdf"))
     plt.close()
