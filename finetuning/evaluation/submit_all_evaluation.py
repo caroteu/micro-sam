@@ -225,4 +225,4 @@ if __name__ == "__main__":
 
 
 # start evaluation with
-# python submit_all_evaluation.py -d livecell -m vit_b -e specialist -e /scratch/usr/nimcarot/sam/experiments/lora/
+# python submit_all_evaluation.py -d livecell -m vit_b -e specialist --experiment_path /scratch/usr/nimcarot/sam/experiments/LoRA/rank1 --checkpoint_path /scratch/usr/nimcarot/sam/experiments/LoRA/rank1/checkpoints/livecell_lora/best.pt

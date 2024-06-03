@@ -81,7 +81,7 @@ def finetune_livecell(args):
         device=device,
         checkpoint_path=checkpoint_path,
         freeze=freeze_parts,
-        get_lora=True,
+        get_lora=args.use_lora,
         rank=args.rank
     )
     model.to(device)
@@ -182,6 +182,10 @@ def main():
     parser.add_argument(
         "--rank", type=int, default=4,
         help="The rank used in LoRA finetuning."
+    )
+    parser.add_argument(
+        "--use_lora", action="store_true",
+        help="Whether to use LoRA for finetuning."
     )
     args = parser.parse_args()
     finetune_livecell(args)
