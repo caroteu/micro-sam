@@ -7,6 +7,7 @@ from torch_em.model import UNETR
 from torch_em.loss import DiceBasedDistanceLoss
 from torch_em.data.datasets import get_livecell_loader
 from torch_em.transform.label import PerObjectDistanceTransform
+from lion_pytorch import Lion
 
 import micro_sam.training as sam_training
 from micro_sam.util import export_custom_sam_model
@@ -109,7 +110,10 @@ def finetune_livecell(args):
         if not name.startswith("encoder"):
             joint_model_params.append(params)
 
-    optimizer = torch.optim.AdamW(joint_model_params, lr=5e-5)
+    # Use Lion Optimizer with learning rate 3-10x smaller than AdamW (5e-5)
+    # Need to install pip install lion-pytorch
+
+    optimizer = Lion(joint_model_params, lr=args.learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.9, patience=10)
     train_loader, val_loader = get_dataloaders(patch_shape=patch_shape, data_path=args.input_path)
 
@@ -186,6 +190,9 @@ def main():
     parser.add_argument(
         "--use_lora", action="store_true",
         help="Whether to use LoRA for finetuning."
+    )
+    parser.add_argument(
+        "--learning_rate", type=float, default=1e-4,
     )
     args = parser.parse_args()
     finetune_livecell(args)

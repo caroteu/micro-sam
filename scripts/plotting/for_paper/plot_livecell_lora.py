@@ -8,7 +8,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 
-EXPERIMENT_ROOT = "/scratch/usr/nimcarot/sam/experiments/LoRA"
+EXPERIMENT_ROOT = "/scratch/usr/nimcarot/sam/experiments/"
 PROJECT_ROOT = "/scratch/projects/nim00007/sam/experiments/"
 
 
@@ -35,13 +35,20 @@ plt.rcParams.update({'font.size': 30})
 
 
 def gather_livecell_results(type):
-    if type=="default" or type=="full_ft":
-        type = "rank1"
-    result_paths = glob(
-        os.path.join(
-            EXPERIMENT_ROOT, type, "results", "*"
+
+    if type == "default":
+        result_paths = glob(
+            os.path.join(
+                EXPERIMENT_ROOT, "livecell", "vanilla", "vit_b", "results", "*"
+            )
+        ) 
+    else: 
+        result_paths = glob(
+            os.path.join(
+                EXPERIMENT_ROOT, "LoRA", type, "results", "*"
+            )
         )
-    )
+    print(result_paths)
     amg_score, ais_score, ib_score, ip_score = None, None, None, None
     for result_path in sorted(result_paths):
         if os.path.split(result_path)[-1].startswith("grid_search_"):
@@ -119,9 +126,10 @@ def plot_for_livecell():
     for i, experiment in enumerate(ALL_MODELS):
         if experiment == "default":
             amg, _, ib, ip, cellpose_res = gather_livecell_results(experiment)
+            get_barplots(ALL_MODELS[experiment], ax[i//4][i%4], ib, ip, amg, cellpose_res, get_ylabel=(i%4==0))
         else:
             amg, ais, ib, ip, cellpose_res = gather_livecell_results(experiment)
-        get_barplots(ALL_MODELS[experiment], ax[i//4][i%4], ib, ip, amg, cellpose_res, ais, get_ylabel=(i%4==0))
+            get_barplots(ALL_MODELS[experiment], ax[i//4][i%4], ib, ip, amg, cellpose_res, ais, get_ylabel=(i%4==0))
 
     # here, we remove the legends for each subplot, and get one common legend for all
     all_lines, all_labels = [], []
