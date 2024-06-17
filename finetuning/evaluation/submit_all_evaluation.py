@@ -214,13 +214,13 @@ def main(args):
     #        specific_experiment = None
     dataset_name = "orgasegment"
     for experiment_set in ["generalist", "specialist_full_ft", "specialist_lora", "vanilla"]:
-            
+        specific_experiment = "iterative_prompting"    
         roi = ALL_DATASETS[dataset_name]
         try:
             shutil.rmtree("./gpu_jobs")
         except FileNotFoundError: 
             pass
-        submit_slurm(dataset_name, experiment_set, roi, None, args)
+        submit_slurm(dataset_name, experiment_set, roi, specific_experiment, args)
 
 
 

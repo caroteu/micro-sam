@@ -73,8 +73,8 @@ def submit_slurm(args):
         #"livecell": "~/micro-sam/finetuning/livecell/lora/train_livecell",
         #"covid_if": "~/micro-sam/finetuning/specialists/lora/covid_if_lora",
         #"mouse-embryo": "specialists/lora/mouse_embryo_lora",
-        #"orgasegment": "specialists/lora/orga_segment_lora",
-        "platy_cilia": "specialists/lora/platy_cilia_lora",
+        "orgasegment": "specialists/lora/orga_segment_lora",
+        #"platy_cilia": "specialists/lora/platy_cilia_lora",
         #"mitolab_glycolytic_muscle": "specialists/lora/mytolab_lora",
     }
     if args.experiment_name is None:

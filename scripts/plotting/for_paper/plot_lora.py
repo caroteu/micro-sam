@@ -7,6 +7,8 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+# Number of trainable parameters for 
+# ViT Base: 4.21M (LoRA), 93.74M (Full)
 
 EXPERIMENT_ROOT = "/scratch/usr/nimcarot/sam/experiments/SpecialistLoRA/"
 PROJECT_ROOT = "/scratch/projects/nim00007/sam/experiments/"
@@ -32,18 +34,19 @@ DATASETS = {
     "covid_if": "Covid IF",
     "mouse-embryo": "Mouse Embryo",
     "orgasegment": "OrgaSegment",
-    "platy_cilia": "Platynereis (Cilia)",
-    "mitolab_glycolytic_muscle": "MitoLab (Glycolytic Muscle)"
+    "platynereis/cilia": "Platynereis (Cilia)",
+    "mitolab/glycolytic_muscle": "MitoLab (Glycolytic Muscle)"
 }
 FIG_ASPECT = (30, 20)
 
 plt.rcParams.update({'font.size': 30})
 
 
-def gather_livecell_results(type, dataset="livecell", model="vit_b"):
-    domain = "em" if dataset in ["mitolab_glycolytic_muscle", "platy_cilia"] else "lm"
+def gather_results(type, dataset="livecell", model="vit_b"):
+    domain = "em" if dataset in ["mitolab/glycolytic_muscle", "platynereis/cilia"] else "lm"
+    
     if type == "generalist":
-        model = f"{model}_{domain}"
+        model = f"{model}_lm" if domain == "lm" else f"{model}_em_organelles"
     result_paths = glob(
         os.path.join(
             EXPERIMENT_ROOT, type, domain, dataset, model, "results", "*"
@@ -126,11 +129,11 @@ def plot_for_livecell(dataset="livecell"):
     for i, experiment in enumerate(ALL_MODELS):
         print(experiment, dataset)
         if experiment == "default":
-            amg, _, ib, ip, cellpose_res = gather_livecell_results(experiment, dataset)
+            _, _, ib, ip, cellpose_res = gather_results(experiment, dataset)
             get_barplots(ALL_MODELS[experiment], ax[i//2][i%2], ib, ip, None, cellpose_res, get_ylabel=(i%2==0))
         else:
-            amg, ais, ib, ip, cellpose_res = gather_livecell_results(experiment, dataset)
-            get_barplots(ALL_MODELS[experiment], ax[i//2][i%2], ib, ip, None, cellpose_res, ais, get_ylabel=(i%2==0))
+            _, _, ib, ip, cellpose_res = gather_results(experiment, dataset)
+            get_barplots(ALL_MODELS[experiment], ax[i//2][i%2], ib, ip, None, cellpose_res, get_ylabel=(i%2==0))
 
     # here, we remove the legends for each subplot, and get one common legend for all
     all_lines, all_labels = [], []
@@ -150,7 +153,8 @@ def plot_for_livecell(dataset="livecell"):
     plt.tight_layout()
     fig.suptitle(DATASETS[dataset], fontsize=42, x=0.54, y=0.95, fontweight="bold")
     plt.subplots_adjust(right=0.95, left=0.1, top=0.87, bottom=0.1)
-    _path = f"{dataset}_lora.svg" 
+    _save_name = dataset.split("/")[0]
+    _path = f"{_save_name}_lora.svg" 
     plt.savefig(_path)
     plt.savefig(Path(_path).with_suffix(".pdf"))
     plt.close()
@@ -159,6 +163,8 @@ def plot_for_livecell(dataset="livecell"):
 
 def main():
     for dataset in list(DATASETS.keys()):
+        if dataset == "orgasegment":
+            continue
         plot_for_livecell(dataset)
 
 if __name__ == "__main__":

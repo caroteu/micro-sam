@@ -14,48 +14,8 @@ from micro_sam.training.util import ResizeLabelTrafo, ResizeRawTrafo
 
 
 ROOT = "/scratch/projects/nim00007/sam/data"
-# ROOT = "/media/anwai/ANWAI/data/"
 
 
-class convert_to_RGB():
-
-    def __init__(self):
-        pass 
-
-    def __call__(self, raw):
-        #print("before transform: ")
-        #print(raw.shape)
-        if raw.ndim == 3 and raw.shape[0] == 1:
-            raw = torch.cat((raw, raw, raw), dim=0)
-        elif raw.ndim == 2:
-            raw = np.stack((raw, raw, raw), axis=0)  # Add a batch dimension: [1, 512, 512]
-        
-        assert raw.ndim == 3, raw.shape[0] == 3
-        #print("after transform: ")
-        #print(raw.shape)
-        return raw
-
-class convert_labels_to_RGB():
-    def __init__(self):
-        pass
-    
-    def __call__(self, labels):
-
-        #print("Shape of labels before transform : ", labels.shape)
-
-        if labels.ndim == 2: 
-            labels = np.stack(labels, axis = 0)
-        #assert labels.ndim == 3
-        #print("Shape of labels after first transform : ", labels.shape)
-
-        label_trafo = PerObjectDistanceTransform(distances=True, boundary_distances=True, directed_distances=False, foreground=True, instances=True, min_size=0) 
-        labels = label_trafo(labels)
-
-        #print("Shape of labels after second transform : ", labels.shape)
-        return labels
-
-        
-  
 
 def _fetch_loaders(dataset_name):
 
@@ -112,8 +72,8 @@ def _fetch_loaders(dataset_name):
     elif dataset_name == "orgasegment":
         # 2. OrgaSegment has internal splits provided. We follow the respective splits for our experiments.
 
-        raw_transform = convert_to_RGB()
-        label_transform = convert_labels_to_RGB()
+        raw_transform = ResizeRawTrafo(do_padding=False, triplicate_dims=True)
+        label_transform = ResizeLabelTrafo(do_padding=False, triplicate_dims=True)
 
         train_loader = light_microscopy.get_orgasegment_loader(
             path=os.path.join(ROOT, "orgasegment"),
