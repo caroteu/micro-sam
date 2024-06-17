@@ -37,12 +37,13 @@ DATASETS = [
     "tissuenet/one_chan", "tissuenet/multi_chan", "deepbacs", "plantseg/root", "livecell",
     "neurips-cell-seg/all", "neurips-cell-seg/tuning", "neurips-cell-seg/self",
     # out-of-domain (LM)
-    "covid_if", "plantseg/ovules", "hpa", "lizard", "mouse-embryo", "ctc/hela_samples", "dynamicnuclearnet", "pannuke",
+    "covid_if", "plantseg/ovules", "hpa", "lizard", "mouse-embryo", "ctc/hela_samples", "dynamicnuclearnet", "pannuke", "orgasegment",
     # organelles (EM)
     #   - in-domain
     "mitoem/rat", "mitoem/human", "platynereis/nuclei",
     #   - out-of-domain
     "mitolab/c_elegans", "mitolab/fly_brain", "mitolab/glycolytic_muscle", "mitolab/hela_cell",
+    
     "mitolab/lucchi_pp", "mitolab/salivary_gland", "mitolab/tem", "lucchi", "nuc_mm/mouse",
     "nuc_mm/zebrafish", "uro_cell", "sponge_em", "platynereis/cilia", "vnc", "asem/mito", "asem/er",
     # boundaries - EM
@@ -82,8 +83,6 @@ def get_dataset_paths(dataset_name, split_choice):
 
 def get_model(model_type, ckpt):
     custom_model = True
-    if ckpt is None:
-        ckpt = VANILLA_MODELS[model_type]
     predictor = get_sam_model(model_type=model_type, checkpoint_path=ckpt)
     return predictor
 
@@ -94,7 +93,11 @@ def get_paths(dataset_name, split):
     if dataset_name == "livecell":
         image_paths, gt_paths = _get_livecell_paths(input_folder=os.path.join(ROOT, "livecell"), split=split)
         return sorted(image_paths), sorted(gt_paths)
-
+    #NOTE: change this to work automatically with get_paths
+    if dataset_name == "orgasegment":
+        image_paths = sorted(glob(os.path.join(ROOT, "orgasegment", "train", "*jpg")))
+        gt_paths = sorted(glob(os.path.join(ROOT, "orgasegment", "train", "*png")))
+        return image_paths, gt_paths
     image_dir, gt_dir = get_dataset_paths(dataset_name, split)
     image_paths = sorted(glob(os.path.join(image_dir)))
     gt_paths = sorted(glob(os.path.join(gt_dir)))
@@ -220,7 +223,7 @@ def get_default_arguments():
     parser.add_argument(
         "-m", "--model", type=str, required=True, help="Provide the model type to initialize the predictor"
     )
-    parser.add_argument("-c", "--checkpoint", type=none_or_str, required=True, default=None)
+    parser.add_argument("-c", "--checkpoint", type=none_or_str, required=False, default=None)
     parser.add_argument("-e", "--experiment_folder", type=str, required=True)
     parser.add_argument("-d", "--dataset", type=str, default=None)
     parser.add_argument("--box", action="store_true", help="If passed, starts with first prompt as box")
