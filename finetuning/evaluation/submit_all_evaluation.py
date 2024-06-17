@@ -7,6 +7,8 @@ from pathlib import Path
 from datetime import datetime
 
 
+ALL_DATASETS = {'livecell':'lm', 'covid_if':'lm', 'orgasegment':'lm', 'mouse-embryo':'lm', 'mitolab/glycolytic_muscle':'em_organelles', 'platynereis/cilia':'em_organelles'}
+
 ALL_SCRIPTS = [
     "precompute_embeddings", "evaluate_amg", "iterative_prompting", "evaluate_instance_segmentation"
 ]
@@ -40,8 +42,8 @@ mamba activate {env_name} \n"""
 
     _op = out_path[:-3] + f"_{inference_setup}.sh"
 
-    # add the finetuned checkpoint
-    python_script += f"-c {checkpoint} "
+    if checkpoint is not None:# add the finetuned checkpoint
+        python_script += f"-c {checkpoint} "
 
     # name of the model configuration
     python_script += f"-m {model_type} "
@@ -87,8 +89,10 @@ def get_batch_script_names(tmp_folder):
 def get_checkpoint_path(experiment_set, dataset_name, model_type, region):
     # let's set the experiment type - either using the generalist or just using vanilla model
     if experiment_set == "generalist":
-        checkpoint = f"/scratch/usr/nimanwai/micro-sam/checkpoints/{model_type}/"
-
+        checkpoint = None
+        # set new model_type to vit_b_em_organelles or vit_b_lm
+        model_type = f"{model_type}_{region}"
+        """
         if region == "organelles":
             checkpoint += "mito_nuc_em_generalist_sam/best.pt"
         elif region == "boundaries":
@@ -97,8 +101,10 @@ def get_checkpoint_path(experiment_set, dataset_name, model_type, region):
             checkpoint += "lm_generalist_sam/best.pt"
         else:
             raise ValueError("Choose `region` from lm / organelles / boundaries")
+        """
 
-    elif experiment_set == "specialist":
+    elif experiment_set == "specialist_full_ft" or experiment_set == "specialist_lora":
+        finetuning_type = "lora" if experiment_set == "specialist_lora" else "full_ft"
         _split = dataset_name.split("/")
         if len(_split) > 1:
             # it's the case for plantseg/root, we catch it and convert it to the expected format
@@ -111,8 +117,12 @@ def get_checkpoint_path(experiment_set, dataset_name, model_type, region):
             dataset_name = "asem_er"
         if dataset_name.startswith("tissuenet"):
             dataset_name = "tissuenet"
+        if dataset_name.startswith("platynereis"):
+            dataset_name = "platy_cilia"
+        if dataset_name.startswith("mitolab"):
+            dataset_name = "mitolab_glycolytic_muscle"
 
-        checkpoint = f"/scratch/usr/nimcarot/micro-sam/sam/checkpoints/vit_b_livecell_lora.pt"
+        checkpoint = f"/scratch/usr/nimcarot/sam/experiments/SpecialistLoRA/checkpoints/{dataset_name}_{finetuning_type}/best.pt"
 
     elif experiment_set == "vanilla":
         checkpoint = None
@@ -126,15 +136,12 @@ def get_checkpoint_path(experiment_set, dataset_name, model_type, region):
     return checkpoint
 
 
-def submit_slurm(args):
+def submit_slurm(dataset_name, experiment_set, region, specific_experiment, args):
     "Submit python script that needs gpus with given inputs on a slurm node."
     tmp_folder = "./gpu_jobs"
 
-    # parameters to run the inference scripts
-    dataset_name = args.dataset_name  # name of the dataset in lower-case
-    model_type = args.model_type
-    experiment_set = args.experiment_set  # infer using generalist or vanilla models
-    region = args.roi  # use the organelles model or boundaries model
+    model_type = f"{args.model_type}_{region}" if experiment_set == "generalist" else args.model_type
+
     make_delay = "10s"  # wait for precomputing the embeddings and later run inference scripts
 
     if args.checkpoint_path is None:
@@ -144,20 +151,20 @@ def submit_slurm(args):
 
     if args.experiment_path is None:
         modality = region if region == "lm" else "em"
-        experiment_folder = "/scratch/projects/nim00007/sam/experiments/new_models/v3/"
+        experiment_folder = "/scratch/usr/nimcarot/sam/experiments/SpecialistLoRA/"
         experiment_folder += f"{experiment_set}/{modality}/{dataset_name}/{model_type}/"
     else:
         experiment_folder = args.experiment_path
 
     # now let's run the experiments
-    if args.specific_experiment is None:
+    if specific_experiment is None:
         if experiment_set == "vanilla":
             all_setups = ALL_SCRIPTS[:-1]
         else:
             all_setups = ALL_SCRIPTS
     else:
-        assert args.specific_experiment in ALL_SCRIPTS
-        all_setups = [args.specific_experiment]
+        assert specific_experiment in ALL_SCRIPTS
+        all_setups = [specific_experiment]
 
     # env name
     if model_type == "vit_t":
@@ -166,6 +173,7 @@ def submit_slurm(args):
         env_name = "sam"
 
     for current_setup in all_setups:
+        print("Write batch script for", current_setup, checkpoint, model_type, dataset_name)
         write_batch_script(
             env_name=env_name,
             out_path=get_batch_script_names(tmp_folder),
@@ -199,14 +207,27 @@ def main(args):
     except FileNotFoundError:
         pass
 
-    submit_slurm(args)
+    #for dataset_name in list(ALL_DATASETS.keys())[:-2]:
+    #    if dataset_name in ["mouse-embryo", "covid_if", "livecell"]:
+    #        specific_experiment = "iterative_prompting"
+    #    else:
+    #        specific_experiment = None
+    dataset_name = "orgasegment"
+    for experiment_set in ["generalist", "specialist_full_ft", "specialist_lora", "vanilla"]:
+            
+        roi = ALL_DATASETS[dataset_name]
+        try:
+            shutil.rmtree("./gpu_jobs")
+        except FileNotFoundError: 
+            pass
+        submit_slurm(dataset_name, experiment_set, roi, None, args)
+
 
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     # the parameters to use the default models
-    parser.add_argument("-d", "--dataset_name", type=str, required=True)
     parser.add_argument("-m", "--model_type", type=str, required=True)
     parser.add_argument("-e", "--experiment_set", type=str)
     # optional argument to specify for the experiment root folder automatically

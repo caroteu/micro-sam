@@ -9,37 +9,10 @@ from torch_em.data.datasets import get_livecell_loader
 from torch_em.transform.label import PerObjectDistanceTransform
 from lion_pytorch import Lion
 
+from get_loaders_for_lora import _fetch_loaders
+
 import micro_sam.training as sam_training
 from micro_sam.util import export_custom_sam_model
-
-
-def get_dataloaders(patch_shape, data_path, cell_type=None):
-    """This returns the livecell data loaders implemented in torch_em:
-    https://github.com/constantinpape/torch-em/blob/main/torch_em/data/datasets/livecell.py
-    It will automatically download the livecell data.
-
-    Note: to replace this with another data loader you need to return a torch data loader
-    that retuns `x, y` tensors, where `x` is the image data and `y` are the labels.
-    The labels have to be in a label mask instance segmentation format.
-    I.e. a tensor of the same spatial shape as `x`, with each object mask having its own ID.
-    Important: the ID 0 is reseved for background, and the IDs must be consecutive
-    """
-    label_transform = PerObjectDistanceTransform(
-        distances=True, boundary_distances=True, directed_distances=False, foreground=True, instances=True, min_size=25
-    )
-    raw_transform = sam_training.identity  # the current workflow avoids rescaling the inputs to [-1, 1]
-    train_loader = get_livecell_loader(
-        path=data_path, patch_shape=patch_shape, split="train", batch_size=2, num_workers=16,
-        cell_types=cell_type, download=True, shuffle=True, label_transform=label_transform,
-        raw_transform=raw_transform, label_dtype=torch.float32,
-    )
-    val_loader = get_livecell_loader(
-        path=data_path, patch_shape=patch_shape, split="val", batch_size=4, num_workers=16,
-        cell_types=cell_type, download=True, shuffle=True, label_transform=label_transform,
-        raw_transform=raw_transform, label_dtype=torch.float32,
-    )
-
-    return train_loader, val_loader
 
 
 def count_parameters(model):
@@ -71,7 +44,7 @@ def finetune_livecell(args):
 
     # training settings:
     model_type = args.model_type
-    checkpoint_path = args.checkpoint_path  # override this to start training from a custom checkpoint
+    checkpoint_path = None  # override this to start training from a custom checkpoint
     patch_shape = (520, 704)  # the patch shape for training
     n_objects_per_batch = 25  # this is the number of objects per batch that will be sampled
     freeze_parts = args.freeze  # override this to freeze different parts of the model
@@ -112,13 +85,13 @@ def finetune_livecell(args):
             
     optimizer = torch.optim.AdamW(joint_model_params, lr=5e-5)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.9, patience=10)
-    train_loader, val_loader = get_dataloaders(patch_shape=patch_shape, data_path=args.input_path)
+    train_loader, val_loader = _fetch_loaders(args.data_name)
 
     # this class creates all the training data for a batch (inputs, prompts and labels)
     convert_inputs = sam_training.ConvertToSamInputs(transform=model.transform, box_distortion_factor=0.025)
 
     trainer = sam_training.JointSamTrainer(
-        name="livecell_lora",
+        name=f"{args.data_name}_{'lora' if args.use_lora else 'full_ft'}",
         save_root=args.save_root,
         train_loader=train_loader,
         val_loader=val_loader,
@@ -152,9 +125,10 @@ def finetune_livecell(args):
 
 def main():
     parser = argparse.ArgumentParser(description="Finetune Segment Anything for the LiveCELL dataset.")
+
     parser.add_argument(
-        "--input_path", "-i", default="/scratch/projects/nim00007/sam/data/livecell/",
-        help="The filepath to the LiveCELL data. If the data does not exist yet it will be downloaded."
+        "--data_name", "-d", default="livecell",
+        help="The name of the dataset to use for training."
     )
     parser.add_argument(
         "--model_type", "-m", default="vit_b",
@@ -175,10 +149,6 @@ def main():
     parser.add_argument(
         "--freeze", type=str, nargs="+", default=None,
         help="Which parts of the model to freeze for finetuning."
-    )
-    parser.add_argument(
-        "--checkpoint_path", "-c", type=str, default=None,
-        help="The path to a custom checkpoint to start training from."
     )
     parser.add_argument(
         "--rank", type=int, default=4,

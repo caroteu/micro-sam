@@ -4,18 +4,11 @@ import subprocess
 from datetime import datetime
 
 
-N_OBJECTS = {
-    "vit_t": 50,
-    "vit_b": 40,
-    "vit_l": 30,
-    "vit_h": 25
-}
 
-
-def write_batch_script(out_path, _name, env_name, model_type, save_root):
+def write_batch_script(out_path, _name, data, env_name, model_type, save_root, use_lora=False):
     "Writing scripts with different micro-sam finetunings."
     batch_script = f"""#!/bin/bash
-#SBATCH -t 14-00:00:00
+#SBATCH -t 4-00:00:00
 #SBATCH --mem 64G
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -23,14 +16,16 @@ def write_batch_script(out_path, _name, env_name, model_type, save_root):
 #SBATCH -G A100:1
 #SBATCH -A nim00007
 #SBATCH -c 16
-#SBATCH --qos=14d
+#SBATCH --qos=96h
 #SBATCH --constraint=80gb
-#SBATCH --job-name={os.path.split(_name)[-1]}
+#SBATCH --job-name={data}_{"lora" if use_lora else "full"}
 
 source activate {env_name} \n"""
 
     # python script
     python_script = f"python {_name}.py "
+
+    python_script += f"--data_name {data} "
 
     # save root folder
     python_script += f"-s {save_root} "
@@ -39,7 +34,12 @@ source activate {env_name} \n"""
     python_script += f"-m {model_type} "
 
     # choice of the number of objects
-    python_script += f"--n_objects {N_OBJECTS[model_type[:5]]} "
+    #python_script += f"--n_objects {N_OBJECTS[model_type[:5]]} "
+
+    python_script += "--iterations 10000 "
+
+    if use_lora:
+        python_script += f"--use_lora "
 
     # let's add the python script to the bash script
     batch_script += python_script
@@ -69,42 +69,52 @@ def submit_slurm(args):
     "Submit python script that needs gpus with given inputs on a slurm node."
     tmp_folder = "./gpu_jobs"
 
-    script_combinations = {
-        "livecell_specialist": "livecell_finetuning",
-        "deepbacs_specialist": "specialists/training/light_microscopy/deepbacs_finetuning",
-        "tissuenet_specialist": "specialists/training/light_microscopy/tissuenet_finetuning",
-        "plantseg_root_specialist": "specialists/training/light_microscopy/plantseg_root_finetuning",
-        "neurips_cellseg_specialist": "specialists/training/light_microscopy/neurips_cellseg_finetuning",
-        "dynamicnuclearnet_specialist": "specialists/training/light_microscopy/dynamicnuclearnet_finetuning",
-        "lm_generalist": "generalists/training/light_microscopy/train_lm_generalist",
-        "cremi_specialist": "specialists/training/electron_microscopy/boundaries/cremi_finetuning",
-        "asem_specialist": "specialists/training/electron_microscopy/organelles/asem_finetuning",
-        "em_mito_nuc_generalist": "generalists/training/electron_microscopy/mito_nuc/train_mito_nuc_em_generalist",
-        "em_boundaries_generalist": "generalists/training/electron_microscopy/boundaries/train_boundaries_em_generalist"
+    data = {
+        #"livecell": "~/micro-sam/finetuning/livecell/lora/train_livecell",
+        #"covid_if": "~/micro-sam/finetuning/specialists/lora/covid_if_lora",
+        #"mouse-embryo": "specialists/lora/mouse_embryo_lora",
+        #"orgasegment": "specialists/lora/orga_segment_lora",
+        "platy_cilia": "specialists/lora/platy_cilia_lora",
+        #"mitolab_glycolytic_muscle": "specialists/lora/mytolab_lora",
     }
     if args.experiment_name is None:
-        experiments = list(script_combinations.keys())
+        experiments = list(data.keys())
     else:
-        assert args.experiment_name in list(script_combinations.keys()), \
-            f"Choose from {list(script_combinations.keys())}"
+        assert args.experiment_name in list(data.keys()), \
+            f"Choose from {list(data.keys())}"
         experiments = [args.experiment_name]
 
-    if args.model_type is None:
-        models = list(N_OBJECTS.keys())
-    else:
-        models = [args.model_type]
 
     for experiment in experiments:
-        script_name = script_combinations[experiment]
+        script_name = "~/micro-sam/finetuning/specialists/lora/train_lora"
         print(f"Running for {script_name}")
-        for model_type in models:
-            write_batch_script(
-                out_path=get_batch_script_names(tmp_folder),
-                _name=script_name,
-                env_name="mobilesam" if model_type == "vit_t" else "sam",
-                model_type=model_type,
-                save_root=args.save_root
-            )
+
+        if experiment in ["platy_cilia", "mitolab"]:
+            model_checkpoint = "/scratch/projects/nim00007/sam/models/EM/generalist/v2/vit_b/best.pt"
+            model_type = "vit_b_em_organelles"
+        else:
+            model_checkpoint = "/scratch/projects/nim00007/sam/models/LM/generalist/v2/vit_b/best.pt" 
+            model_type = "vit_b_lm"
+
+        # Full Finetuning
+        write_batch_script(
+            out_path=get_batch_script_names(tmp_folder),
+            _name=script_name,
+            data=experiment,
+            env_name="sam",
+            model_type=model_type,
+            save_root=args.save_root
+        )
+        # Lora Finetuning
+        write_batch_script(
+            out_path=get_batch_script_names(tmp_folder),
+            _name=script_name,
+            data=experiment,
+            env_name="sam",
+            model_type=model_type,
+            save_root=args.save_root,
+            use_lora=True
+        )
 
 
 def main(args):
@@ -120,7 +130,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("-e", "--experiment_name", type=str, default=None)
-    parser.add_argument("-s", "--save_root", type=str, default="/scratch/usr/nimanwai/micro-sam/")
-    parser.add_argument("-m", "--model_type", type=str, default=None)
+    parser.add_argument("-s", "--save_root", type=str, default="/scratch/usr/nimcarot/sam/experiments/SpecialistLoRA")
+    parser.add_argument("-m", "--model_type", type=str, default="vit_b")
     args = parser.parse_args()
     main(args)

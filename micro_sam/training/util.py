@@ -211,10 +211,11 @@ class ConvertToSamInputs:
 
 
 class ResizeRawTrafo:
-    def __init__(self, desired_shape, do_rescaling=True, padding="constant"):
+    def __init__(self, desired_shape, do_rescaling=False, padding="constant", triplicate_dims=False):
         self.desired_shape = desired_shape
         self.padding = padding
         self.do_rescaling = do_rescaling
+        self.triplicate_dims = triplicate_dims
 
     def __call__(self, raw):
         if self.do_rescaling:
@@ -222,15 +223,22 @@ class ResizeRawTrafo:
             raw = np.mean(raw, axis=0)
             raw = normalize(raw)
             raw = raw * 255
+        
+        if self.triplicate_dims:
+            if raw.ndim == 3 and raw.shape[0] == 1:
+                raw = np.concatenate((raw, raw, raw), axis=0)
+            if raw.ndim == 2: 
+                raw = np.stack((raw, raw, raw), axis = 0)
 
-        tmp_ddim = (self.desired_shape[0] - raw.shape[0], self.desired_shape[1] - raw.shape[1])
+
+        tmp_ddim = (self.desired_shape[-2] - raw.shape[-2], self.desired_shape[-1] - raw.shape[-1])
         ddim = (tmp_ddim[0] / 2, tmp_ddim[1] / 2)
         raw = np.pad(
             raw,
-            pad_width=((ceil(ddim[0]), floor(ddim[0])), (ceil(ddim[1]), floor(ddim[1]))),
+            pad_width=((0,0),(ceil(ddim[0]), floor(ddim[0])), (ceil(ddim[1]), floor(ddim[1]))),
             mode=self.padding
         )
-        assert raw.shape == self.desired_shape
+        assert raw.shape[-2:] == self.desired_shape[-2:], raw.shape
         return raw
 
 
@@ -241,19 +249,26 @@ class ResizeLabelTrafo:
         self.min_size = min_size
 
     def __call__(self, labels):
+        if labels.ndim == 3:
+            assert labels.shape[0] == 1
+            labels = labels[0]
+
         distance_trafo = PerObjectDistanceTransform(
             distances=True, boundary_distances=True, directed_distances=False,
             foreground=True, instances=True, min_size=self.min_size
         )
+
         labels = distance_trafo(labels)
 
+
         # choosing H and W from labels (4, H, W), from above dist trafo outputs
-        tmp_ddim = (self.desired_shape[0] - labels.shape[1], self.desired_shape[0] - labels.shape[2])
+        tmp_ddim = (self.desired_shape[0] - labels.shape[1], self.desired_shape[1] - labels.shape[2])
         ddim = (tmp_ddim[0] / 2, tmp_ddim[1] / 2)
         labels = np.pad(
             labels,
-            pad_width=((0, 0), (ceil(ddim[0]), floor(ddim[0])), (ceil(ddim[1]), floor(ddim[1]))),
+            pad_width=((0,0), (ceil(ddim[0]), floor(ddim[0])), (ceil(ddim[1]), floor(ddim[1]))),
             mode=self.padding
         )
+        #print("Shape after trafo: ", labels.shape)
         assert labels.shape[1:] == self.desired_shape, labels.shape
         return labels
