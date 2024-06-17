@@ -375,6 +375,10 @@ def _save_segmentation(masks, prediction_path):
     masks = masks.cpu().numpy().squeeze(1).astype("bool")
     masks = [{"segmentation": mask, "area": mask.sum()} for mask in masks]
     segmentation = mask_data_to_segmentation(masks, with_background=True)
+    name, file_ending = os.path.splitext(prediction_path)
+    if file_ending.lower() == ".jpeg" or file_ending.lower() == ".jpg":
+        prediction_path = name + ".png"
+
     imageio.imwrite(prediction_path, segmentation, compression=5)
 
 
