@@ -251,7 +251,6 @@ def _load_checkpoint(checkpoint_path):
     custom_pickle.Unpickler = _CustomUnpickler
 
     state = torch.load(checkpoint_path, map_location="cpu", pickle_module=custom_pickle)
-
     if "model_state" in state:
         # Copy the model weights from torch_em's training format.
         model_state = state["model_state"]
@@ -340,7 +339,6 @@ def get_sam_model(
     abbreviated_model_type = model_type[:5]
     if abbreviated_model_type not in _MODEL_TYPES:
         raise ValueError(f"Invalid model_type: {abbreviated_model_type}. Expect one of {_MODEL_TYPES}")
-
     if abbreviated_model_type == "vit_t" and not VIT_T_SUPPORT:
         raise RuntimeError(
             "mobile_sam is required for the vit-tiny."

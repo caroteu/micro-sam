@@ -82,7 +82,6 @@ def get_dataset_paths(dataset_name, split_choice):
 
 
 def get_model(model_type, ckpt):
-    custom_model = True
     predictor = get_sam_model(model_type=model_type, checkpoint_path=ckpt)
     return predictor
 

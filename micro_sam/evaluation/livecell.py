@@ -86,6 +86,7 @@ def livecell_inference(
     n_positives: Optional[int] = None,
     n_negatives: Optional[int] = None,
     prompt_folder: Optional[Union[str, os.PathLike]] = None,
+    predictor: Optional[SamPredictor] = None,
 ) -> None:
     """Run inference for livecell with a fixed prompt setting.
 
