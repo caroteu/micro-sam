@@ -48,7 +48,6 @@ def finetune_livecell(args):
 
     # training settings:
     model_type = args.model_type
-    checkpoint_path = args.checkpoint_path  # override this to start training from a custom checkpoint
     patch_shape = (520, 704)  # the patch shape for training
     n_objects_per_batch = 25  # this is the number of objects per batch that will be sampled
     freeze_parts = args.freeze  # override this to freeze different parts of the model
@@ -123,7 +122,7 @@ def finetune_livecell(args):
         instance_loss=DiceBasedDistanceLoss(mask_distances_in_bg=True),
         instance_metric=DiceBasedDistanceLoss(mask_distances_in_bg=True)
     )
-    trainer.fit(args.iterations, save_every_kth_epoch=1)
+    trainer.fit(args.iterations)
     if args.export_path is not None:
         checkpoint_path = os.path.join(
             "" if args.save_root is None else args.save_root, "checkpoints", args.name, "best.pt"
@@ -160,10 +159,6 @@ def main():
     parser.add_argument(
         "--freeze", type=str, nargs="+", default=None,
         help="Which parts of the model to freeze for finetuning."
-    )
-    parser.add_argument(
-        "--checkpoint_path", "-c", type=str, 
-        help="Path to checkpoint from where the model is trained" 
     )
     # Parameter for training grid search
     parser.add_argument("--name", default="livecell_sam")

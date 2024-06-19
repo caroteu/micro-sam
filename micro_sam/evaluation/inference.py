@@ -128,7 +128,6 @@ def _run_inference_with_prompts_for_image(
     if not use_boxes and (n_positives == 1 and n_negatives == 0):
         multimasking = True
 
-
     instance_labels = batched_inference(
         predictor, image, batch_size,
         boxes=boxes, points=points, point_labels=point_labels,
@@ -282,7 +281,6 @@ def run_inference_with_prompts(
         image_paths: The image file paths.
         gt_paths: The ground-truth segmentation file paths.
         embedding_dir: The directory where the image embddings will be saved or are already saved.
-        prediction_dir: The directory where the predictions will be saved.
         use_points: Whether to use point prompts.
         use_boxes: Whether to use box prompts
         n_positives: The number of positive point prompts that will be sampled.
@@ -305,8 +303,6 @@ def run_inference_with_prompts(
      )
 
     os.makedirs(prediction_dir, exist_ok=True)
-
-
     for image_path, gt_path in tqdm(
         zip(image_paths, gt_paths), total=len(image_paths), desc="Run inference with prompts"
     ):
@@ -342,7 +338,6 @@ def run_inference_with_prompts(
             cached_point_prompts[label_name] = this_prompts[:2]
         if save_box_prompts:
             cached_box_prompts[label_name] = this_prompts[-1]
-        
 
         # It's important to compress here, otherwise the predictions would take up a lot of space.
         imageio.imwrite(prediction_path, instances, compression=5)

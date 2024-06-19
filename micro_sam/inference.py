@@ -57,7 +57,6 @@ def batched_inference(
     Returns:
         The predicted segmentation masks.
     """
-
     if multimasking and (segmentation_ids is not None) and (not return_instance_segmentation):
         raise NotImplementedError
 
