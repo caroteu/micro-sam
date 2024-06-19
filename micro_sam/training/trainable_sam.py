@@ -4,7 +4,6 @@ from typing import Any, Dict, List, Tuple, Union
 import torch
 from torch import nn
 from torch.nn import functional as F
-# from torch.nn.parameter import Parameter
 
 from segment_anything.modeling import Sam
 from segment_anything.utils.transforms import ResizeLongestSide

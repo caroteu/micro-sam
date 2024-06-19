@@ -86,7 +86,6 @@ def livecell_inference(
     n_positives: Optional[int] = None,
     n_negatives: Optional[int] = None,
     prompt_folder: Optional[Union[str, os.PathLike]] = None,
-    predictor: Optional[SamPredictor] = None
 ) -> None:
     """Run inference for livecell with a fixed prompt setting.
 
@@ -101,7 +100,6 @@ def livecell_inference(
         n_negatives: The number of negative point prompts.
         prompt_folder: The folder where the prompts should be saved.
         predictor: The segment anything predictor.
-        time_file: The file where the inference timing will be saved.
     """
     image_paths, gt_paths = _get_livecell_paths(input_folder)
     if predictor is None:
@@ -232,7 +230,6 @@ def run_livecell_amg(
         input_folder: The folder with the livecell data.
         model_type: The type of the segmenta anything model.
         experiment_folder: The folder where to save all data associated with the experiment.
-        timeit: Whether to save the inference time
         iou_thresh_values: The values for `pred_iou_thresh` used in the gridsearch.
             By default values in the range from 0.6 to 0.9 with a stepsize of 0.025 will be used.
         stability_score_values: The values for `stability_score_thresh` used in the gridsearch.
