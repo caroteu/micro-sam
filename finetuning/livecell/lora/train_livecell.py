@@ -74,14 +74,15 @@ def finetune_livecell(args):
     patch_shape = (520, 704)  # the patch shape for training
     n_objects_per_batch = 5  # this is the number of objects per batch that will be sampled
     freeze_parts = args.freeze  # override this to freeze different parts of the model
-    rank = args.lora_rank  # the rank
+    rank = 4  # the rank
+
     # get the trainable segment anything model
     model = sam_training.get_trainable_sam_model(
         model_type=model_type,
         device=device,
         checkpoint_path=checkpoint_path,
         freeze=freeze_parts,
-        use_lora=args.use_lora,
+        use_lora=True,
         rank=rank,
     )
     model.to(device)
@@ -115,14 +116,9 @@ def finetune_livecell(args):
 
     # this class creates all the training data for a batch (inputs, prompts and labels)
     convert_inputs = sam_training.ConvertToSamInputs(transform=model.transform, box_distortion_factor=0.025)
-    name = (
-        f"{args.model_type}/livecell_"
-        f"{f'lora_rank_{args.lora_rank}' if args.use_lora else 'sam'}"
-    )
-
 
     trainer = sam_training.JointSamTrainer(
-        name=name,
+        name="livecell_lora",
         save_root=args.save_root,
         train_loader=train_loader,
         val_loader=val_loader,
@@ -179,12 +175,6 @@ def main():
     parser.add_argument(
         "--freeze", type=str, nargs="+", default=None,
         help="Which parts of the model to freeze for finetuning."
-    )
-    parser.add_argument(
-        "--use_lora", action="store_true", help="Whether to use LoRA for finetuning."
-    )
-    parser.add_argument(
-        "--lora_rank", type=int, default=4, help="Pass the rank for LoRA."
     )
     args = parser.parse_args()
     finetune_livecell(args)
