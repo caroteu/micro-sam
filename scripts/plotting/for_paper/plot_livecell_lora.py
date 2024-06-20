@@ -15,13 +15,13 @@ PROJECT_ROOT = "/scratch/projects/nim00007/sam/experiments/"
 TOP_BAR_COLOR, BOTTOM_BAR_COLOR = "#F0746E", "#089099"
 
 ALL_MODELS = {
-    "default": "Vanilla", 
-    "full_ft": "Full Finetuning", 
-    "rank1": "Rank 1",
-    "rank2": "Rank 2",
-    "rank4": "Rank 4",
-    "rank8": "Rank 8",
-    "rank16": "Rank 16"
+    "vanilla": "Vanilla", 
+    "specialist": "Full Finetuning", 
+    "specialist_lora_1": "Rank 1",
+    "specialist_lora_2": "Rank 2",
+    "specialist_lora_4": "Rank 4",
+    "specialist_lora_8": "Rank 8",
+    "specialist_lora_16": "Rank 16"
 }
 
 MODEL_NAME_MAP = {
@@ -34,26 +34,16 @@ FIG_ASPECT = (30, 20)
 plt.rcParams.update({'font.size': 30})
 
 
-def gather_livecell_results(type):
-
-    if type == "default":
-        result_paths = glob(
-            os.path.join(
-                EXPERIMENT_ROOT, "livecell", "vanilla", "vit_b", "results", "*"
-            )
-        ) 
-    else: 
-        result_paths = glob(
-            os.path.join(
-                EXPERIMENT_ROOT, "LoRA", type, "results", "*"
-            )
+def gather_livecell_results(type_):
+    result_paths = glob(
+        os.path.join(
+            EXPERIMENT_ROOT, "lora", type_, "lm", "livecell", "vit_b", "results", "*"
         )
-    print(result_paths)
+    )
     amg_score, ais_score, ib_score, ip_score = None, None, None, None
     for result_path in sorted(result_paths):
         if os.path.split(result_path)[-1].startswith("grid_search_"):
             continue
-        print(result_path)
         res = pd.read_csv(result_path)
         setting_name = Path(result_path).stem
         if setting_name == "amg":
@@ -115,7 +105,7 @@ def get_barplots(name, ax, ib_data, ip_data, amg, cellpose, ais=None, get_ylabel
         ax.axhline(y=amg, label="AMG", color="#FCDE9C", lw=5)
     if ais is not None:
         ax.axhline(y=ais, label="AIS", color="#045275", lw=5)
-    ax.axhline(y=cellpose, label="CellPose", color="#DC3977", lw=5)
+    #ax.axhline(y=cellpose, label="CellPose", color="#DC3977", lw=5)
 
 
 def plot_for_livecell():
@@ -124,9 +114,9 @@ def plot_for_livecell():
 
 
     for i, experiment in enumerate(ALL_MODELS):
-        if experiment == "default":
-            amg, _, ib, ip, cellpose_res = gather_livecell_results(experiment)
-            get_barplots(ALL_MODELS[experiment], ax[i//4][i%4], ib, ip, amg, cellpose_res, get_ylabel=(i%4==0))
+        if experiment == "vanilla":
+            _, _, ib, ip, cellpose_res = gather_livecell_results(experiment)
+            get_barplots(ALL_MODELS[experiment], ax[i//4][i%4], ib, ip, None, cellpose_res, get_ylabel=(i%4==0))
         else:
             amg, ais, ib, ip, cellpose_res = gather_livecell_results(experiment)
             get_barplots(ALL_MODELS[experiment], ax[i//4][i%4], ib, ip, amg, cellpose_res, ais, get_ylabel=(i%4==0))
