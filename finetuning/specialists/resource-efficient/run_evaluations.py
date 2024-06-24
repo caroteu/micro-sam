@@ -12,10 +12,10 @@ import imageio.v3 as imageio
 
 
 ALL_SCRIPTS = [
-    # "../../evaluation/precompute_embeddings",
-    # "../../evaluation/iterative_prompting",
-    "../../evaluation/evaluate_amg",
-    "../../evaluation/evaluate_instance_segmentation"
+    #"~/micro-sam/finetuning/evaluation/precompute_embeddings",
+    "~/micro-sam/finetuning/evaluation/iterative_prompting",
+    #"~/micro-sam/finetuning/evaluation/evaluate_amg",
+    #"~/micro-sam/finetuning/evaluation/evaluate_instance_segmentation"
 ]
 
 ROOT = "/scratch/usr/nimanwai/experiments/resource-efficient-finetuning/"  # for hlrn
@@ -64,7 +64,7 @@ def process_covid_if(input_path):
 
 
 def write_slurm_scripts(
-    inference_setup, env_name, checkpoint, model_type, experiment_folder, out_path
+    inference_setup, env_name, checkpoint, model_type, experiment_folder, out_path, use_lora=False, rank=4
 ):
     on_scc = False
     if on_scc:
@@ -92,8 +92,11 @@ source activate {env_name} \n"""
     # python script
     batch_script += f"python {inference_setup}.py -c {checkpoint} -m {model_type} -e {experiment_folder} -d covid_if "
 
+    if use_lora:
+        batch_script += f"--use_lora --lora_rank {rank} "
     _op = out_path[:-3] + f"_{Path(inference_setup).stem}.sh"
 
+    print(batch_script)
     with open(_op, "w") as f:
         f.write(batch_script)
 
@@ -102,6 +105,7 @@ source activate {env_name} \n"""
         batch_script += "--box "
 
         new_path = out_path[:-3] + f"_{Path(inference_setup).stem}_box.sh"
+        print(batch_script)
         with open(new_path, "w") as f:
             f.write(batch_script)
 
@@ -119,7 +123,7 @@ def get_batch_script_names(tmp_folder):
     return batch_script
 
 
-def run_slurm_scripts(model_type, checkpoint, experiment_folder, scripts=ALL_SCRIPTS):
+def run_slurm_scripts(model_type, checkpoint, experiment_folder, scripts=ALL_SCRIPTS, use_lora=False, rank=4):
     tmp_folder = "./gpu_jobs"
     shutil.rmtree(tmp_folder, ignore_errors=True)
 
@@ -130,7 +134,9 @@ def run_slurm_scripts(model_type, checkpoint, experiment_folder, scripts=ALL_SCR
             checkpoint=checkpoint,
             model_type=model_type,
             experiment_folder=experiment_folder,
-            out_path=get_batch_script_names(tmp_folder)
+            out_path=get_batch_script_names(tmp_folder),
+            use_lora=use_lora,
+            rank=rank
         )
 
     # the logic below automates the process of first running the precomputation of embeddings, and only then inference.
@@ -153,47 +159,54 @@ def main(args):
     process_covid_if(input_path=args.input_path)
 
     # results on vanilla models
-    run_slurm_scripts(
-        model_type="vit_b",
-        checkpoint=None,
-        experiment_folder=os.path.join(ROOT, "vanilla", "vit_b"),
-        scripts=ALL_SCRIPTS[:-1]
-    )
+    #run_slurm_scripts(
+    #    model_type="vit_b",
+    #    checkpoint=None,
+    #    experiment_folder=os.path.join(ROOT, "vanilla", "vit_b"),
+    #    scripts=ALL_SCRIPTS[:-1]
+    #)
 
     # results on generalist models
     # vit_b_lm_path = "/scratch/users/archit/micro-sam/vit_b/lm_generalist/best.pt"  # on scc
-    vit_b_lm_path = "/scratch/usr/nimanwai/micro-sam/checkpoints/vit_b/lm_generalist_sam/best.pt"  # on hlrn
-    run_slurm_scripts(
-        model_type="vit_b",
-        checkpoint=vit_b_lm_path,
-        experiment_folder=os.path.join(ROOT, "generalist", "vit_b")
-    )
+    #vit_b_lm_path = "/scratch/usr/nimanwai/micro-sam/checkpoints/vit_b/lm_generalist_sam/best.pt"  # on hlrn
+    #run_slurm_scripts(
+    #    model_type="vit_b",
+    #    checkpoint=vit_b_lm_path,
+    #    experiment_folder=os.path.join(ROOT, "generalist", "vit_b")
+    #)
 
     # results on resource-efficient finetuned checkpoints
-    all_checkpoint_paths = glob(os.path.join(ROOT, "**", "best.pt"), recursive=True)
+    #all_checkpoint_paths = glob(os.path.join(ROOT, "**", "best.pt"), recursive=True)
 
     # let's get all gpu jobs and run evaluation for them
-    all_checkpoint_paths = [
-        ckpt for ckpt in all_checkpoint_paths if ckpt.find("cpu") != -1
-    ]
+    #all_checkpoint_paths = [
+    #    ckpt for ckpt in all_checkpoint_paths if ckpt.find("cpu") != -1
+    #]
 
-    for checkpoint_path in all_checkpoint_paths:
-        # NOTE: run this for vit_b
-        _searcher = checkpoint_path.find("vit_b")
-        if _searcher == -1:
-            continue
-
-        experiment_folder = os.path.join("/", *checkpoint_path.split("/")[:-4])
-        run_slurm_scripts(
-            model_type=checkpoint_path.split("/")[-3],
-            checkpoint=checkpoint_path,
-            experiment_folder=experiment_folder
-        )
+    #for checkpoint_path in all_checkpoint_paths:
+    #    # NOTE: run this for vit_b
+    #    _searcher = checkpoint_path.find("vit_b")
+    #    if _searcher == -1:
+    #        continue
+    checkpoint_path = args.checkpoint_path
+    experiment_folder = args.experiment_folder
+    run_slurm_scripts(
+        model_type=args.model,
+        checkpoint=checkpoint_path,
+        experiment_folder=experiment_folder,
+        use_lora = args.use_lora,
+        rank=args.lora_rank
+    )
 
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--input_path", type=str, default=DATA_DIR)
+    parser.add_argument("-c", "--checkpoint_path", type=str, default=None)
+    parser.add_argument("--experiment_folder", type=str, required=True)
+    parser.add_argument("-m", "--model", type=str, required=True)
+    parser.add_argument("--use_lora", action="store_true", help="Whether to use LoRA for finetuning.")
+    parser.add_argument("--lora_rank", type=int, default=4)
     args = parser.parse_args()
     main(args)
