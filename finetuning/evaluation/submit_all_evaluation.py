@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import datetime
 
 # Replace with the path to the experiments folder
-ROOT = "/scratch/usr/nimcarot/sam/experiments/dummy_directory"
+ROOT = "/scratch/usr/nimcarot/sam/experiments/covid_if_with_lora"
 
 ALL_SCRIPTS = [
     "precompute_embeddings", "evaluate_amg", "iterative_prompting", "evaluate_instance_segmentation"

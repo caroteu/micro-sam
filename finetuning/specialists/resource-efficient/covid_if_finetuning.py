@@ -91,7 +91,7 @@ def finetune_covid_if(args):
 
     # get the trainable segment anything model
     model = sam_training.get_trainable_sam_model(
-        model_type=model_type, device=device, checkpoint_path=target_checkpoint_path, freeze=freeze_parts
+        model_type=model_type, device=device, checkpoint_path=target_checkpoint_path, freeze=freeze_parts, use_lora=args.use_lora, rank=args.rank
     )
     model.to(device)
 
@@ -141,7 +141,8 @@ def finetune_covid_if(args):
     # this class creates all the training data for a batch (inputs, prompts and labels)
     convert_inputs = sam_training.ConvertToSamInputs(transform=model.transform, box_distortion_factor=0.025)
 
-    checkpoint_name = f"{args.model_type}/covid_if_sam"
+    checkpoint_name = f"{args.model_type}/covid_if_{f'lora_rank_{args.rank}' if args.use_lora else 'sam'}"
+    print(checkpoint_name)
 
     # the trainer which performs the joint training and validation (implemented using "torch_em")
     trainer = sam_training.JointSamTrainer(
@@ -217,6 +218,12 @@ def main():
     )
     parser.add_argument(
         "--n_images", type=int, default=None, help="The number of images used for finetuning."
+    )
+    parser.add_argument(
+        "--use_lora", action="store_true", help="Whether to use LoRA for finetuning."
+    )
+    parser.add_argument(
+        "--rank", type=int, default=4, help="Pass the rank for LoRA."
     )
     args = parser.parse_args()
     finetune_covid_if(args)
