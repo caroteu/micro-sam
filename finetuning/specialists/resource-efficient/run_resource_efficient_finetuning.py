@@ -7,7 +7,7 @@ from datetime import datetime
 def base_slurm_script(env_name, partition, cpu_mem, cpu_cores, gpu_name=None):
     assert partition in ["grete:shared", "gpu", "medium"]
     if gpu_name is not None:
-        assert gpu_name in ["gtx1080", "rtx5000", "v100", "V100"]
+        assert gpu_name in ["gtx1080", "rtx5000", "v100", "V100", "A100"]
 
     base_script = f"""#!/bin/bash
 #SBATCH -c {cpu_cores}
@@ -19,7 +19,7 @@ def base_slurm_script(env_name, partition, cpu_mem, cpu_cores, gpu_name=None):
         base_script += f"#SBATCH -G {gpu_name}:1 \n"
 
     if partition.startswith("grete"):
-        base_script += "#SBATCH -A gzz0001 \n"
+        base_script += "#SBATCH -A nim00007 \n"
 
     base_script += "\n" + f"source activate {env_name}" + "\n"
 
@@ -41,7 +41,7 @@ def write_batch_sript(
         gpu_name=gpu_name
     )
 
-    python_script = "python covid_if_finetuning.py "
+    python_script = "python ~/micro-sam/finetuning/specialists/resource-efficient/covid_if_finetuning.py "
 
     # add parameters to the python script
     python_script += f"-i {input_path} "  # path to the covid-if data
@@ -97,23 +97,24 @@ def main(args):
     tmp_folder = "./gpu_jobs"
     model_type = args.model_type
 
-    all_n_images = [1, 2, 5, 10]
-    for n_images in all_n_images:
-        write_batch_sript(
-            env_name="mobilesam" if model_type[:5] == "vit_t" else "sam",
-            partition=args.partition,
-            cpu_mem=args.mem,
-            cpu_cores=args.cpu_cores,
-            gpu_name=args.gpu_name,
-            input_path=args.input_path,
-            save_root=args.save_root,
-            model_type=model_type,
-            n_objects=args.n_objects,
-            n_images=n_images,
-            script_name=get_batch_script_names(tmp_folder),
-            freeze=args.freeze,
-            checkpoint_path=args.checkpoint
-        )
+    #all_n_images = [1, 2, 5, 10]
+    #for n_images in all_n_images:
+    n_images = 10
+    write_batch_sript(
+        env_name="mobilesam" if model_type[:5] == "vit_t" else "sam",
+        partition=args.partition,
+        cpu_mem=args.mem,
+        cpu_cores=args.cpu_cores,
+        gpu_name=args.gpu_name,
+        input_path=args.input_path,
+        save_root=args.save_root,
+        model_type=model_type,
+        n_objects=args.n_objects,
+        n_images=n_images,
+        script_name=get_batch_script_names(tmp_folder),
+        freeze=args.freeze,
+        checkpoint_path=args.checkpoint
+    )
 
 
 if __name__ == "__main__":
