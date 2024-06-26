@@ -12,13 +12,13 @@ import imageio.v3 as imageio
 
 
 ALL_SCRIPTS = [
-    # "../../evaluation/precompute_embeddings",
-    # "../../evaluation/iterative_prompting",
-    "../../evaluation/evaluate_amg",
-    "../../evaluation/evaluate_instance_segmentation"
+     "~/micro-sam/finetuning/evaluation/precompute_embeddings",
+     "~/micro-sam/finetuning/evaluation/iterative_prompting",
+    "~/micro-sam/finetuning/evaluation/evaluate_amg",
+    "~/micro-sam/finetuning/evaluation/evaluate_instance_segmentation"
 ]
 
-ROOT = "/scratch/usr/nimanwai/experiments/resource-efficient-finetuning/"  # for hlrn
+ROOT = "/scratch/usr/nimcarot/sam/experiments/covid_if_master/"  # for hlrn
 # ROOT = "/scratch/users/archit/experiments/"  # for scc
 
 DATA_DIR = "/scratch/projects/nim00007/sam/data/covid_if/"  # for hlrn
@@ -94,14 +94,16 @@ source activate {env_name} \n"""
 
     _op = out_path[:-3] + f"_{Path(inference_setup).stem}.sh"
 
+    print(batch_script)
     with open(_op, "w") as f:
         f.write(batch_script)
-
+    
     # we run the first prompt for iterative once starting with point, and then starting with box (below)
     if inference_setup.endswith("iterative_prompting"):
         batch_script += "--box "
 
         new_path = out_path[:-3] + f"_{Path(inference_setup).stem}_box.sh"
+        print(batch_script)
         with open(new_path, "w") as f:
             f.write(batch_script)
 
@@ -152,7 +154,6 @@ def main(args):
     # preprocess the data
     process_covid_if(input_path=args.input_path)
 
-    # results on vanilla models
     run_slurm_scripts(
         model_type="vit_b",
         checkpoint=None,
@@ -161,8 +162,8 @@ def main(args):
     )
 
     # results on generalist models
-    # vit_b_lm_path = "/scratch/users/archit/micro-sam/vit_b/lm_generalist/best.pt"  # on scc
-    vit_b_lm_path = "/scratch/usr/nimanwai/micro-sam/checkpoints/vit_b/lm_generalist_sam/best.pt"  # on hlrn
+    vit_b_lm_path = "/scratch/usr/nimcarot/sam/checkpoints/vit_b_lm.pt"  # on scc
+    #vit_b_lm_path = "/scratch/usr/nimcarot/sam/checkpoints/vit_b_lm.pt"  # on hlrn
     run_slurm_scripts(
         model_type="vit_b",
         checkpoint=vit_b_lm_path,
@@ -173,9 +174,9 @@ def main(args):
     all_checkpoint_paths = glob(os.path.join(ROOT, "**", "best.pt"), recursive=True)
 
     # let's get all gpu jobs and run evaluation for them
-    all_checkpoint_paths = [
-        ckpt for ckpt in all_checkpoint_paths if ckpt.find("cpu") != -1
-    ]
+    #all_checkpoint_paths = [
+    #    ckpt for ckpt in all_checkpoint_paths if ckpt.find("cpu") != -1
+    #]
 
     for checkpoint_path in all_checkpoint_paths:
         # NOTE: run this for vit_b
@@ -184,6 +185,7 @@ def main(args):
             continue
 
         experiment_folder = os.path.join("/", *checkpoint_path.split("/")[:-4])
+        print(experiment_folder)
         run_slurm_scripts(
             model_type=checkpoint_path.split("/")[-3],
             checkpoint=checkpoint_path,
