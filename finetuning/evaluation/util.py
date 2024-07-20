@@ -9,7 +9,7 @@ from micro_sam.util import get_sam_model
 from micro_sam.evaluation.livecell import _get_livecell_paths
 
 
-ROOT = "/scratch/projects/nim00007/sam/data/"
+ROOT = "/scratch/usr/nimcarot/data/"
 
 EXPERIMENT_ROOT = "/scratch/projects/nim00007/sam/experiments/new_models"
 
