@@ -6,9 +6,8 @@ from glob import glob
 from pathlib import Path
 from datetime import datetime
 
-from preprocess_lora import preprocess_data
 
-ALL_DATASETS = {'covid_if':'lm', 'orgasegment':'lm', 'mouse-embryo':'lm', 'mitolab/glycolytic_muscle':'em_organelles', 'platynereis/cilia':'em_organelles'}
+ALL_DATASETS = {'livecell':'lm', 'covid_if':'lm', 'orgasegment':'lm', 'mouse-embryo':'lm', 'mitolab/glycolytic_muscle':'em_organelles', 'platynereis/cilia':'em_organelles'}
 
 ALL_SCRIPTS = [
     "precompute_embeddings", "evaluate_amg", "iterative_prompting", "evaluate_instance_segmentation"
@@ -17,7 +16,7 @@ ALL_SCRIPTS = [
 
 def write_batch_script(
     env_name, out_path, inference_setup, checkpoint, model_type,
-    experiment_folder, dataset_name, delay=None, use_masks=False, lora_rank=None
+    experiment_folder, dataset_name, delay=None, use_masks=False
 ):
     "Writing scripts with different fold-trainings for micro-sam evaluation"
     batch_script = f"""#!/bin/bash
@@ -38,7 +37,7 @@ mamba activate {env_name} \n"""
         batch_script += f"sleep {delay} \n"
 
     # python script
-    inference_script_path = os.path.join("~/micro-sam/finetuning/evaluation", f"{inference_setup}.py")
+    inference_script_path = os.path.join(Path(__file__).parent, f"{inference_setup}.py")
     python_script = f"python {inference_script_path} "
 
     _op = out_path[:-3] + f"_{inference_setup}.sh"
@@ -59,13 +58,10 @@ mamba activate {env_name} \n"""
     if inference_setup == "iterative_prompting" and use_masks:
         python_script += "--use_masks "
 
-    if lora_rank is not None:
-        python_script += f"--lora_rank {lora_rank} "
-
     # let's add the python script to the bash script
     batch_script += python_script
-    if inference_setup == "precompute_embeddings":
-        print(batch_script)
+
+    print(batch_script)
     with open(_op, "w") as f:
         f.write(batch_script)
 
@@ -108,8 +104,8 @@ def get_checkpoint_path(experiment_set, dataset_name, model_type, region):
             raise ValueError("Choose `region` from lm / organelles / boundaries")
         """
 
-    elif experiment_set == "specialist_full_ft" or experiment_set == "specialist_lora":
-        finetuning_type = "4" if experiment_set == "specialist_lora" else "full_ft"
+    elif experiment_set == "specialist" or experiment_set == "specialist_lora":
+        finetuning_type = "_lora" if experiment_set == "specialist_lora" else ""
         _split = dataset_name.split("/")
         if len(_split) > 1:
             # it's the case for plantseg/root, we catch it and convert it to the expected format
@@ -127,9 +123,9 @@ def get_checkpoint_path(experiment_set, dataset_name, model_type, region):
         if dataset_name.startswith("mitolab"):
             dataset_name = "mitolab_glycolytic_muscle"
 
-        checkpoint = f"/scratch/usr/nimcarot/sam/experiments/lora_datasets/checkpoints/{model_type}_{region}/{dataset_name}_sam_{finetuning_type}/best.pt"
+        checkpoint = f"/scratch/usr/nimcarot/sam/experiments/covid_if/checkpoints/vit_b_lm/{dataset_name}_sam{finetuning_type}/best.pt"
 
-    elif experiment_set == "vanilla":
+    elif experiment_set == "vanilla" or experiment_set == "generalist":
         checkpoint = None
 
     else:
@@ -141,69 +137,60 @@ def get_checkpoint_path(experiment_set, dataset_name, model_type, region):
     return checkpoint
 
 
-def submit_slurm(args, specific_experiment=None):
+def submit_slurm(dataset_name, experiment_set, region, specific_experiment, args):
     "Submit python script that needs gpus with given inputs on a slurm node."
     tmp_folder = "./gpu_jobs"
+
+    model_type = f"{args.model_type}_{region}" if experiment_set == "generalist" else args.model_type
+
     make_delay = "10s"  # wait for precomputing the embeddings and later run inference scripts
 
+    if args.checkpoint_path is None:
+        checkpoint = get_checkpoint_path(experiment_set, dataset_name, model_type, region)
+    else:
+        checkpoint = args.checkpoint_path
+
+    if args.experiment_path is None:
+        modality = region if region == "lm" else "em"
+        experiment_folder = "/scratch/usr/nimcarot/sam/experiments/lora/"
+        if experiment_set == "specialist":
+            checkpoint_name = checkpoint.split("/")[-5:-2]
+            experiment_folder += f"{experiment_set}/{dataset_name}/{checkpoint_name}/{model_type}/"
+        experiment_folder += f"{experiment_set}/{modality}/{dataset_name}/{model_type}/"
+    else:
+        experiment_folder = args.experiment_path
+
+    # now let's run the experiments
+    if specific_experiment is None:
+        if experiment_set == "vanilla":
+            all_setups = ALL_SCRIPTS[:-1]
+        else:
+            all_setups = ALL_SCRIPTS
+    else:
+        assert specific_experiment in ALL_SCRIPTS
+        all_setups = [specific_experiment]
+
     # env name
-    if args.model_type == "vit_t":
+    if model_type == "vit_t":
         env_name = "mobilesam"
     else:
         env_name = "sam"
 
-    for dataset_name in list(ALL_DATASETS.keys())[:2]:
-
-        preprocess_data(dataset_name)
-        for experiment_set in ["generalist", "specialist_full_ft", "specialist_lora", "vanilla"]:
-            
-            region = ALL_DATASETS[dataset_name]
-            model_type = f"{args.model_type}_{region}" if experiment_set == "generalist" else args.model_type
-
-            if args.checkpoint_path is None:
-                checkpoint = get_checkpoint_path(experiment_set, dataset_name, model_type, region)
-            else:
-                checkpoint = args.checkpoint_path
-
-            if args.experiment_path is None:
-                modality = region if region == "lm" else "em"
-                experiment_folder = "/scratch/usr/nimcarot/sam/experiments/lora_datasets/"
-                experiment_folder += f"{experiment_set}/{modality}/{dataset_name}/{model_type}/"
-            else:
-                experiment_folder = args.experiment_path
-
-            if specific_experiment is None:
-                if experiment_set == "vanilla":
-                    all_setups = ALL_SCRIPTS[:-1]
-                else:
-                    all_setups = ALL_SCRIPTS
-            else:
-                assert specific_experiment in ALL_SCRIPTS
-                all_setups = [specific_experiment]
- 
-            if experiment_set == "specialist_lora":
-                lora_rank = 4
-            else: 
-                lora_rank = None
-
-            for current_setup in all_setups:
-                print("Write batch script for", current_setup, checkpoint, model_type, dataset_name)
-
-                write_batch_script(
-                    env_name=env_name,
-                    out_path=get_batch_script_names(tmp_folder),
-                    inference_setup=current_setup,
-                    checkpoint=checkpoint,
-                    model_type=model_type,
-                    experiment_folder=experiment_folder,
-                    dataset_name=dataset_name,
-                    delay=None if current_setup == "precompute_embeddings" else make_delay,
-                    use_masks=args.use_masks,
-                    lora_rank=lora_rank
-                )
+    for current_setup in all_setups:
+        print("Write batch script for", current_setup, checkpoint, model_type, dataset_name)
+        write_batch_script(
+            env_name=env_name,
+            out_path=get_batch_script_names(tmp_folder),
+            inference_setup=current_setup,
+            checkpoint=checkpoint,
+            model_type=model_type,
+            experiment_folder=experiment_folder,
+            dataset_name=dataset_name,
+            delay=None if current_setup == "precompute_embeddings" else make_delay,
+            use_masks=args.use_masks
+            )
 
     # the logic below automates the process of first running the precomputation of embeddings, and only then inference.
-    
     job_id = []
     for i, my_script in enumerate(sorted(glob(tmp_folder + "/*"))):
         cmd = ["sbatch", my_script]
@@ -216,7 +203,6 @@ def submit_slurm(args, specific_experiment=None):
 
         if i == 0:
             job_id.append(re.findall(r'\d+', cmd_out.stdout)[0])
-    
 
 
 def main(args):
@@ -224,7 +210,16 @@ def main(args):
         shutil.rmtree("./gpu_jobs")
     except FileNotFoundError:
         pass
-    submit_slurm(args)
+
+    #for dataset_name in list(ALL_DATASETS.keys())[:-2]:
+    dataset_name = "covid_if"
+    for experiment_set in ["specialist"]:
+        roi = ALL_DATASETS[dataset_name]
+        try:
+            shutil.rmtree("./gpu_jobs")
+        except FileNotFoundError: 
+            pass
+        submit_slurm(dataset_name, experiment_set, roi, None, args)
 
 
 

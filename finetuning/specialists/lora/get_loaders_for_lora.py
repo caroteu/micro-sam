@@ -35,8 +35,6 @@ class RawTrafo:
 
         if self.do_padding:
             assert self.desired_shape is not None
-            #print("Raw Shape:")
-            #print(raw.shape)
             tmp_ddim = (self.desired_shape[-2] - raw.shape[-2], self.desired_shape[-1] - raw.shape[-1])
             ddim = (tmp_ddim[0] / 2, tmp_ddim[1] / 2)
             raw = np.pad(
@@ -44,7 +42,6 @@ class RawTrafo:
                 pad_width=((ceil(ddim[0]), floor(ddim[0])), (ceil(ddim[1]), floor(ddim[1]))),
                 mode=self.padding
             )   
-            #print(f"Afer padding:{raw.shape}")
             assert raw.shape[-2:] == self.desired_shape[-2:], raw.shape
         
         if self.triplicate_dims:
@@ -52,9 +49,6 @@ class RawTrafo:
                 raw = np.concatenate((raw, raw, raw), axis=0)
             if raw.ndim == 2: 
                 raw = np.stack((raw, raw, raw), axis = 0)
-
-            #print(f"Raw Shape after triplicate_dims:{raw.shape}")
-
 
         return raw
 
@@ -88,14 +82,11 @@ class LabelTrafo:
             assert self.desired_shape is not None
             tmp_ddim = (self.desired_shape[0] - labels.shape[1], self.desired_shape[1] - labels.shape[2])
             ddim = (tmp_ddim[0] / 2, tmp_ddim[1] / 2)
-            #print("labels shape:")
-            #print(labels.shape)
             labels = np.pad(
                 labels,
                 pad_width=((0,0), (ceil(ddim[0]), floor(ddim[0])), (ceil(ddim[1]), floor(ddim[1]))),
                 mode=self.padding
             )
-            #print(labels.shape)
             assert labels.shape[1:] == self.desired_shape, labels.shape
 
         return labels
@@ -248,12 +239,12 @@ def _fetch_loaders(dataset_name):
         # 5. Platynereis (Cilia)
         # the logic used here is: I use the first 85 slices per volume from the training split for training
         # and the next ~10-15 slices per volume from the training split for validation
-        # and we use the whole volume from the val set for testing
+        # and we use the third volume from the trainng set for testing
         train_rois = {
-            1: np.s_[0:85, :, :], 2: np.s_[0:85, :, :], 3: np.s_[0:85, :, :]
+            1: np.s_[0:85, :, :], 2: np.s_[0:85, :, :]
         }
         val_rois = {
-            1: np.s_[85:, :, :], 2: np.s_[85:, :, :], 3: np.s_[85:, :, :]
+            1: np.s_[85:, :, :], 2: np.s_[85:, :, :]
         }
 
         raw_transform = RawTrafo((3,512,512), triplicate_dims=False)
