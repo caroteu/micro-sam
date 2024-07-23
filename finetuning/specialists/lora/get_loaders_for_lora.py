@@ -24,14 +24,8 @@ class RawTrafo:
 
     def __call__(self, raw):
         if self.do_rescaling:
-            if len(raw.shape) == 3:
-                raw = normalize_percentile(raw, axis=(1, 2))
-                raw = np.mean(raw, axis=0)
-                raw = normalize(raw)
-                raw = raw * 255
-            else:
-                raw = normalize(raw)
-                raw = raw * 255
+            raw = normalize(raw)
+            raw = raw * 255
 
         if self.do_padding:
             assert self.desired_shape is not None
@@ -54,21 +48,16 @@ class RawTrafo:
 
 
 class LabelTrafo:
-    def __init__(self, desired_shape=None, padding="constant", min_size=0, triplicate_dims=False, do_padding=True):
+    def __init__(self, desired_shape=None, padding="constant", min_size=0, do_padding=True):
         self.desired_shape = desired_shape
         self.padding = padding
         self.min_size = min_size
-        self.triplicate_dims = triplicate_dims
         self.do_padding = do_padding
 
     def __call__(self, labels):
         if labels.ndim == 3:
             assert labels.shape[0] == 1
             labels = labels[0]
-
-        if self.triplicate_dims:
-            if labels.ndim == 2: 
-                labels = np.stack(labels, axis = 0)
 
         distance_trafo = PerObjectDistanceTransform(
             distances=True, boundary_distances=True, directed_distances=False,
@@ -129,7 +118,7 @@ def _fetch_loaders(dataset_name):
         # 2. OrgaSegment has internal splits provided. We follow the respective splits for our experiments.
         
         raw_transform = RawTrafo(do_padding=False, triplicate_dims=True)
-        label_transform = LabelTrafo(do_padding=False, triplicate_dims=True)
+        label_transform = LabelTrafo(do_padding=False)
 
         train_loader = light_microscopy.get_orgasegment_loader(
             path=os.path.join(ROOT, "orgasegment"),
@@ -247,7 +236,7 @@ def _fetch_loaders(dataset_name):
             1: np.s_[85:, :, :], 2: np.s_[85:, :, :]
         }
 
-        raw_transform = RawTrafo((3,512,512), triplicate_dims=False)
+        raw_transform = RawTrafo((1,512,512))
         label_transform = LabelTrafo((512,512))
 
         train_loader = electron_microscopy.get_platynereis_cilia_loader(

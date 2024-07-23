@@ -325,15 +325,10 @@ def make_custom_splits(val_samples, save_dir):
     shutil.rmtree(os.path.join(save_dir, "raw"))
     shutil.rmtree(os.path.join(save_dir, "labels"))
 
-
-def convert_to_tiff(input_path, output_path):
-    with Image.open(input_path) as img:
-        img.save(output_path, "TIFF")
-
 def for_orgasegment(save_path):
 
     val_img_paths = sorted(glob(os.path.join(ROOT, "orgasegment", "val", "*_img.jpg")))
-    val_label_paths = sorted(glob(os.path.join(ROOT, "orgasegment", "val", "*_masks_organoid_jpg")))
+    val_label_paths = sorted(glob(os.path.join(ROOT, "orgasegment", "val", "*_masks_organoid.png")))
     test_img_paths = sorted(glob(os.path.join(ROOT, "orgasegment", "eval", "*_img.jpg")))
     test_label_paths = sorted(glob(os.path.join(ROOT, "orgasegment", "eval", "*_masks_organoid.png")))
     
@@ -345,20 +340,16 @@ def for_orgasegment(save_path):
     volumes = [val_img_paths, val_label_paths, test_img_paths, test_label_paths]
     for vol in range(2):
         for i, (image_path, label_path) in enumerate(zip(volumes[vol*2], volumes[vol*2+1])):
-            print(image_path, label_path)
             _split = "test" if "eval" in str(image_path) else "val"
-            img_shape = imageio.imread(image_path).shape
-            label_shape = imageio.imread(label_path).shape
+            image = imageio.imread(image_path)
+            img_shape = image.shape
+            label = imageio.imread(label_path)
 
-            #if img_shape != label_shape:
-            #    print(img_shape, label_shape)
-            #    imageio.imwrite(label_path, make_center_crop(imageio.imread(label_path), img_shape))
-            #    img_shape = imageio.imread(image_path).shape
-            #    label_shape = imageio.imread(label_path).shape
-            #    print(img_shape, label_shape)
-
-            convert_to_tiff(image_path, os.path.join(save_path,_split, "raw", f"orgasegment_{_split}_{i+1:05}.tif"))
-            convert_to_tiff(label_path, os.path.join(save_path,_split, "labels", f"orgasegment_{_split}_{i+1:05}.tif"))
+            if len(img_shape) == 2:
+                image = np.stack([image, image, image], axis=2)
+            
+            imageio.imwrite(os.path.join(save_path,_split, "raw", f"orgasegment_{_split}_{i+1:05}.tif"), image)
+            imageio.imwrite(os.path.join(save_path,_split, "labels", f"orgasegment_{_split}_{i+1:05}.tif"), label)
 
 
 def download_all_datasets(path):
@@ -377,10 +368,10 @@ def main():
 
     download_all_datasets(ROOT)
 
-    #preprocess_data("covid_if")
-    #preprocess_data("mouse-embryo")
-    #preprocess_data("platynereis")
-    #preprocess_data("mitolab")
+    preprocess_data("covid_if")
+    preprocess_data("mouse-embryo")
+    preprocess_data("platynereis")
+    preprocess_data("mitolab")
     preprocess_data("orgasegment")
 
 if __name__ == "__main__":

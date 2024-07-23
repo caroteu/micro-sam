@@ -8,7 +8,7 @@ from datetime import datetime
 
 from preprocess_lora import preprocess_data
 
-ALL_DATASETS = {'covid_if':'lm', 'orgasegment':'lm', 'mouse-embryo':'lm', 'mitolab/glycolytic_muscle':'em_organelles', 'platynereis/cilia':'em_organelles'}
+ALL_DATASETS = {'covid_if':'lm', 'orgasegment':'lm', 'mouse-embryo':'lm', 'mitolab_glycolytic_muscle':'em_organelles', 'platy_cilia':'em_organelles'}
 
 ALL_SCRIPTS = [
     "precompute_embeddings", "evaluate_amg", "iterative_prompting", "evaluate_instance_segmentation"
@@ -53,6 +53,10 @@ mamba activate {env_name} \n"""
     python_script += f"-e {experiment_folder} "
 
     # IMPORTANT: choice of the dataset
+    if dataset_name == "platy_cilia":
+        dataset_name = "platynereis/cilia"
+    elif dataset_name == "mitolab_glycolytic_muscle":
+        dataset_name = "mitolab/glycolytic_muscle"
     python_script += f"-d {dataset_name} "
 
     # use logits for iterative prompting
@@ -155,7 +159,7 @@ def submit_slurm(args, specific_experiment=None):
     for dataset_name in list(ALL_DATASETS.keys())[:2]:
 
         preprocess_data(dataset_name)
-        for experiment_set in ["generalist", "specialist_full_ft", "specialist_lora", "vanilla"]:
+        for experiment_set in ["vanilla", "generalist", "specialist_full_ft", "specialist_lora"]:
             
             region = ALL_DATASETS[dataset_name]
             model_type = f"{args.model_type}_{region}" if experiment_set == "generalist" else args.model_type
