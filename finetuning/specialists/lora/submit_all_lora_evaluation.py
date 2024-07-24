@@ -156,8 +156,7 @@ def submit_slurm(args, specific_experiment=None):
     else:
         env_name = "sam"
 
-    for dataset_name in list(ALL_DATASETS.keys())[:2]:
-
+    for dataset_name in list(ALL_DATASETS.keys()):
         preprocess_data(dataset_name)
         for experiment_set in ["vanilla", "generalist", "specialist_full_ft", "specialist_lora"]:
             

@@ -70,7 +70,7 @@ def main(args):
     datasets = ["covid_if", "orgasegment", "mouse-embryo", "mitolab_glycolytic_muscle", "platy_cilia"]
 
     
-    for data in ["mitolab_glycolytic_muscle", "platy_cilia"]:
+    for data in datasets:
         for lora_rank in [None, 4]:
             roi = "em_organelles" if data in ["mitolab_glycolytic_muscle", "platy_cilia"] else "lm"
             model_type = f"{args.model_type}_{roi}"
