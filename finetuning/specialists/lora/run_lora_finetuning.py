@@ -70,21 +70,30 @@ def main(args):
     datasets = ["covid_if", "orgasegment", "mouse-embryo", "mitolab_glycolytic_muscle", "platy_cilia"]
 
     
-    for data in datasets:
-        for lora_rank in [None, 4]:
+    for data in ["orgasegment", "mitolab_glycolytic_muscle"]:
+        for lora_rank in [None,1, 2, 4, 8,16,32,64]:
             roi = "em_organelles" if data in ["mitolab_glycolytic_muscle", "platy_cilia"] else "lm"
-            model_type = f"{args.model_type}_{roi}"
+            generalist_model = f"{args.model_type}_{roi}"
             write_batch_sript(
                 env_name="mobilesam" if model_type[:5] == "vit_t" else "sam",
                 save_root=args.save_root,
-                model_type=model_type,
+                model_type=generalist_model,
                 script_name=get_batch_script_names(tmp_folder),
                 freeze=args.freeze,
                 checkpoint_path=args.checkpoint,
                 lora_rank=lora_rank,
                 dataset=data
             )
-
+            write_batch_sript(
+                env_name="mobilesam" if model_type[:5] == "vit_t" else "sam",
+                save_root=args.save_root,
+                model_type="vit_b",
+                script_name=get_batch_script_names(tmp_folder),
+                freeze=args.freeze,
+                checkpoint_path=args.checkpoint,
+                lora_rank=lora_rank,
+                dataset=data
+            )
 
 if __name__ == "__main__":
     try:

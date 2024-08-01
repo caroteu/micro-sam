@@ -23,16 +23,15 @@ def write_batch_script(
     batch_script = f"""#!/bin/bash
 #SBATCH -c 16
 #SBATCH --mem 64G
-#SBATCH -t 4-00:00:00
+#SBATCH -t 1-00:00:00
 #SBATCH -p grete:shared
 #SBATCH -G A100:1
 #SBATCH -A nim00007
 #SBATCH --constraint=80gb
-#SBATCH --qos=96h
 #SBATCH --job-name={inference_setup}
 
 source ~/.bashrc
-mamba activate {env_name} \n"""
+conda activate {env_name} \n"""
 
     if delay is not None:
         batch_script += f"sleep {delay} \n"
@@ -112,8 +111,8 @@ def get_checkpoint_path(experiment_set, dataset_name, model_type, region):
             raise ValueError("Choose `region` from lm / organelles / boundaries")
         """
 
-    elif experiment_set == "specialist_full_ft" or experiment_set == "specialist_lora":
-        finetuning_type = "4" if experiment_set == "specialist_lora" else "full_ft"
+    elif experiment_set == "full_ft" or "lora" in experiment_set:
+        
         _split = dataset_name.split("/")
         if len(_split) > 1:
             # it's the case for plantseg/root, we catch it and convert it to the expected format
@@ -131,7 +130,7 @@ def get_checkpoint_path(experiment_set, dataset_name, model_type, region):
         if dataset_name.startswith("mitolab"):
             dataset_name = "mitolab_glycolytic_muscle"
 
-        checkpoint = f"/scratch/usr/nimcarot/sam/experiments/lora_datasets/checkpoints/{model_type}_{region}/{dataset_name}_sam_{finetuning_type}/best.pt"
+        checkpoint = f"/scratch/usr/nimcarot/sam/experiments/mito-orga/checkpoints/{model_type}/{dataset_name}_{model_type}_{experiment_set}/best.pt"
 
     elif experiment_set == "vanilla":
         checkpoint = None
@@ -156,54 +155,60 @@ def submit_slurm(args, specific_experiment=None):
     else:
         env_name = "sam"
 
-    for dataset_name in list(ALL_DATASETS.keys()):
-        preprocess_data(dataset_name)
-        for experiment_set in ["vanilla", "generalist", "specialist_full_ft", "specialist_lora"]:
+    for dataset_name in ['orgasegment', 'mitolab_glycolytic_muscle']:
+        for base_model in ['vanilla', 'generalist']:
+            for experiment_set in ["full_ft", "lora_1", "lora_2", "lora_4", "lora_8", "lora_16", "lora_32", "lora_64"]:
+
+                # get the rank if finetuned with lora
+                if "lora" in experiment_set:
+                    lora_rank = experiment_set.split('-')[-1].split('_')[-1]
+                else: 
+                    lora_rank = None
             
-            region = ALL_DATASETS[dataset_name]
-            model_type = f"{args.model_type}_{region}" if experiment_set == "generalist" else args.model_type
+                # chose the region and model_type if training was from generalist
+                region = ALL_DATASETS[dataset_name]
+                model_type = f"{args.model_type}_{region}" if base_model == "generalist" else args.model_type
 
-            if args.checkpoint_path is None:
-                checkpoint = get_checkpoint_path(experiment_set, dataset_name, model_type, region)
-            else:
-                checkpoint = args.checkpoint_path
-
-            if args.experiment_path is None:
-                modality = region if region == "lm" else "em"
-                experiment_folder = "/scratch/usr/nimcarot/sam/experiments/lora_datasets/"
-                experiment_folder += f"{experiment_set}/{modality}/{dataset_name}/{model_type}/"
-            else:
-                experiment_folder = args.experiment_path
-
-            if specific_experiment is None:
-                if experiment_set == "vanilla":
-                    all_setups = ALL_SCRIPTS[:-1]
+                # get checkpoint path
+                if args.checkpoint_path is None:
+                    checkpoint = get_checkpoint_path(experiment_set, dataset_name, model_type, region)
                 else:
-                    all_setups = ALL_SCRIPTS
-            else:
-                assert specific_experiment in ALL_SCRIPTS
-                all_setups = [specific_experiment]
- 
-            if experiment_set == "specialist_lora":
-                lora_rank = 4
-            else: 
-                lora_rank = None
+                    checkpoint = args.checkpoint_path
 
-            for current_setup in all_setups:
-                print("Write batch script for", current_setup, checkpoint, model_type, dataset_name)
+                # get experiment path
+                if args.experiment_path is None:
+                    modality = region if region == "lm" else "em"
+                    experiment_folder = "/scratch/usr/nimcarot/sam/experiments/mito-orga/"
+                    experiment_folder += f"{experiment_set}/{dataset_name}/{model_type}/"
+                else:
+                    experiment_folder = args.experiment_path
 
-                write_batch_script(
-                    env_name=env_name,
-                    out_path=get_batch_script_names(tmp_folder),
-                    inference_setup=current_setup,
-                    checkpoint=checkpoint,
-                    model_type=model_type,
-                    experiment_folder=experiment_folder,
-                    dataset_name=dataset_name,
-                    delay=None if current_setup == "precompute_embeddings" else make_delay,
-                    use_masks=args.use_masks,
-                    lora_rank=lora_rank
-                )
+                # make specifications for scripts
+                if specific_experiment is None:
+                    if experiment_set == "vanilla":
+                        all_setups = ALL_SCRIPTS[:-1]
+                    else:
+                        all_setups = ALL_SCRIPTS
+                else:
+                    assert specific_experiment in ALL_SCRIPTS
+                    all_setups = [specific_experiment]
+    
+
+                for current_setup in all_setups:
+                    #print("Write batch script for", current_setup, checkpoint, model_type, dataset_name)
+
+                    write_batch_script(
+                        env_name=env_name,
+                        out_path=get_batch_script_names(tmp_folder),
+                        inference_setup=current_setup,
+                        checkpoint=checkpoint,
+                        model_type=model_type,
+                        experiment_folder=experiment_folder,
+                        dataset_name=dataset_name,
+                        delay=None if current_setup == "precompute_embeddings" else make_delay,
+                        use_masks=args.use_masks,
+                        lora_rank=lora_rank
+                    )
 
     # the logic below automates the process of first running the precomputation of embeddings, and only then inference.
     

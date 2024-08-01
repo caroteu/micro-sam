@@ -26,10 +26,10 @@ def finetune(args):
     n_objects_per_batch = args.n_objects  # this is the number of objects per batch that will be sampled
     freeze_parts = args.freeze  # override this to freeze different parts of the model
     lora_rank = args.lora_rank  # the rank for low rank adaptation
-    checkpoint_ending = f"{lora_rank}" if lora_rank is not None else "full_ft"
+    checkpoint_ending = f"lora_{lora_rank}" if lora_rank is not None else "full_ft"
     dataset = args.dataset
 
-    checkpoint_name = f"{args.model_type}/{dataset}_sam_{checkpoint_ending}"
+    checkpoint_name = f"{args.model_type}/{dataset}_{model_type}_{checkpoint_ending}"
 
     # all the stuff we need for training
     train_loader, val_loader = _fetch_loaders(dataset)
@@ -48,7 +48,7 @@ def finetune(args):
         freeze=freeze_parts,
         device=device,
         lr=1e-5,
-        n_iterations=args.iterations,
+        n_epochs=args.epochs,
         save_root=args.save_root,
         scheduler_kwargs=scheduler_kwargs,
         optimizer_class=optimizer_class,
@@ -75,8 +75,8 @@ def main():
         help="Where to save the checkpoint and logs. By default they will be saved where this script is run."
     )
     parser.add_argument(
-        "--iterations", type=int, default=int(1e4),
-        help="For how many iterations should the model be trained? By default 100k."
+        "--epochs", type=int, default=100,
+        help="For how many epochs should the model be trained? By default 100."
     )
     parser.add_argument(
         "--export_path", "-e",
