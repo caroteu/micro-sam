@@ -9,7 +9,7 @@ from micro_sam.util import get_sam_model
 from micro_sam.evaluation.livecell import _get_livecell_paths
 
 
-ROOT = "/scratch/projects/nim00007/sam/data/"
+ROOT = "/scratch/usr/nimcarot/data/"
 
 EXPERIMENT_ROOT = "/scratch/projects/nim00007/sam/experiments/new_models"
 
@@ -37,7 +37,7 @@ DATASETS = [
     "tissuenet/one_chan", "tissuenet/multi_chan", "deepbacs", "plantseg/root", "livecell",
     "neurips-cell-seg/all", "neurips-cell-seg/tuning", "neurips-cell-seg/self",
     # out-of-domain (LM)
-    "covid_if", "plantseg/ovules", "hpa", "lizard", "mouse-embryo", "ctc/hela_samples", "dynamicnuclearnet", "pannuke",
+    "covid_if", "plantseg/ovules", "hpa", "lizard", "mouse-embryo", "ctc/hela_samples", "dynamicnuclearnet", "pannuke","orgasegment",
     # organelles (EM)
     #   - in-domain
     "mitoem/rat", "mitoem/human", "platynereis/nuclei",

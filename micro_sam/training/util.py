@@ -292,3 +292,4 @@ class ResizeLabelTrafo:
         )
         assert labels.shape[1:] == self.desired_shape, labels.shape
         return labels
+

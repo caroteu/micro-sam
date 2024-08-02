@@ -5,6 +5,7 @@ from micro_sam.evaluation.inference import run_instance_segmentation_with_decode
 
 from util import get_paths  # comment this and create a custom function with the same name to run ais on your data
 from util import get_pred_paths, get_default_arguments
+from get_loaders_for_lora import RawTrafo, LabelTrafo
 
 
 def run_instance_segmentation_with_decoder_inference(dataset_name, model_type, checkpoint, experiment_folder, lora_rank):

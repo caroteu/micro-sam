@@ -5,6 +5,7 @@ from micro_sam.evaluation.inference import run_amg
 
 from util import get_paths  # comment this and create a custom function with the same name to run amg on your data
 from util import get_pred_paths, get_default_arguments, VANILLA_MODELS
+from get_loaders_for_lora import RawTrafo, LabelTrafo
 
 
 def run_amg_inference(dataset_name, model_type, checkpoint, experiment_folder, lora_rank=None):

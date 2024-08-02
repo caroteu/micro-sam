@@ -1,0 +1,6 @@
+
+class RawTrafo():
+    ...
+
+class LabelTrafo():
+    ...
