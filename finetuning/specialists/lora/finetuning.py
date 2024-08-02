@@ -94,7 +94,7 @@ def main():
     )
     parser.add_argument(
         "--dataset", "-d", type=str, required=True,
-        help="The dataset to use for training. Chose from 'covid_if', 'orgasegment, 'mouse-embryo', 'mitolab_glycolytic_muscle', 'platy_cylia'."
+        help="The dataset to use for training. Chose from 'covid_if', 'orgasegment, 'mouse-embryo', 'mitolab_glycolytic_muscle', 'platy_cylia', 'gonuclear."
     )
     args = parser.parse_args()
     finetune(args)

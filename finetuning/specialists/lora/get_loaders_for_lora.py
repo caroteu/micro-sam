@@ -192,8 +192,8 @@ def _fetch_loaders(dataset_name):
         val_rois = np.s_[175:225, :, :]
         test_rois = np.s_[225:, :, :]
 
-        raw_transform = RawTrafo((1,512,512))
-        label_transform = LabelTrafo((512,512))
+        raw_transform = RawTrafo((1,512,512), do_padding=False)
+        label_transform = LabelTrafo((512,512), do_padding=False)
 
         train_loader = electron_microscopy.cem.get_benchmark_loader(
             path=os.path.join(ROOT, "mitolab"),
@@ -264,6 +264,38 @@ def _fetch_loaders(dataset_name):
             raw_transform=raw_transform,
             label_transform=label_transform
         )
+
+    elif dataset_name == "gonuclear":
+        # Dataset contains 5 volumes. Use volumes 1-3 for training, volume 4 for validation and volume 5 for testing. 
+        
+        # NOTE nuclear or cell segmention ? 
+        train_loader = light_microscopy.get_gonuclear_loader(
+            path=os.path.join(ROOT, "gonuclear"),
+            patch_shape=(1, 512, 512),
+            batch_size=2,
+            segmentation_task="nuclei",
+            download=True, 
+            sample_ids=[1135, 1136, 1137], 
+            raw_transform=RawTrafo((1,512,512), do_rescaling=True),
+            label_transform=LabelTrafo((512,512)),
+            num_workers=16,
+            sampler=MinInstanceSampler(),
+            ndim=2
+            
+        )
+        val_loader = light_microscopy.get_gonuclear_loader(
+            path=os.path.join(ROOT, "gonuclear"),
+            patch_shape=(1, 512, 512),
+            batch_size=2,
+            segmentation_task="nuclei",
+            download=True, 
+            sample_ids=[1139], 
+            raw_transform=RawTrafo((1,512,512), do_rescaling=True), 
+            label_transform=LabelTrafo((512,512)),
+            num_workers=16,
+            sampler=MinInstanceSampler(),
+            ndim=2
+        )   
 
     else:
         raise ValueError(f"{dataset_name} is not a valid dataset name.")

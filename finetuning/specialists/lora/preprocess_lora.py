@@ -39,6 +39,8 @@ def preprocess_data(dataset):
         for_mitolab(os.path.join(ROOT, "mitolab", "slices"))
     elif dataset == "orgasegment":
         for_orgasegment(os.path.join(ROOT, "orgasegment", "slices"))
+    elif dataset == "gonuclear":
+        for_gonuclear(os.path.join(ROOT, "gonuclear", "slices"))
 
 
 def convert_rgb(raw):
@@ -351,6 +353,31 @@ def for_orgasegment(save_path):
             imageio.imwrite(os.path.join(save_path,_split, "raw", f"orgasegment_{_split}_{i+1:05}.tif"), image)
             imageio.imwrite(os.path.join(save_path,_split, "labels", f"orgasegment_{_split}_{i+1:05}.tif"), label)
 
+def for_gonuclear(save_path):
+
+    go_nuclear_val_vol = os.path.join(ROOT, "gonuclear", "gonuclear_datasets", "1139.h5")
+    go_nuclear_test_vol = os.path.join(ROOT, "gonulcear", "gonuclear_datasets","1170.h5")
+
+    from_h5_to_tif(
+        h5_vol_path=go_nuclear_val_vol,
+        raw_key="raw",
+        raw_dir=os.path.join(save_path, "val", "raw"),
+        labels_key="label",
+        labels_dir=os.path.join(save_path, "val", "labels"),
+        slice_prefix_name=f"gonuclear_val_{go_nuclear_val_vol}",
+        roi_slices=None
+    )
+    from_h5_to_tif(
+        h5_vol_path=go_nuclear_test_vol,
+        raw_key="raw",
+        raw_dir=os.path.join(save_path, "test", "raw"),
+        labels_key="label",
+        labels_dir=os.path.join(save_path, "test", "labels"),
+        slice_prefix_name=f"gonuclear_test_{go_nuclear_test_vol}",
+        roi_slices=None
+    )
+
+
 
 def download_all_datasets(path):
     datasets.get_platynereis_cilia_dataset(os.path.join(path, "platynereis"), patch_shape=(1, 512, 512), download=True)
@@ -373,6 +400,7 @@ def main():
     preprocess_data("platynereis")
     preprocess_data("mitolab")
     preprocess_data("orgasegment")
+    preprocess_data("gonuclear")
 
 if __name__ == "__main__":
     main()
