@@ -17,7 +17,12 @@ except ImportError:
 from .import util
 
 
-def _compute_object_features_impl(embeddings, segmentation, resize_embedding_shape):
+def _compute_object_features_impl(
+        embeddings,
+        segmentation,
+        resize_embedding_shape,
+        properties=["area", "mean_intensity"]
+):
     # Get the embeddings and put the channel axis last.
     embeddings = embeddings.transpose(1, 2, 0)
 
@@ -32,12 +37,7 @@ def _compute_object_features_impl(embeddings, segmentation, resize_embedding_sha
     assert segmentation_rescaled.shape[0] == segmentation_rescaled.shape[1]
     shape = segmentation_rescaled.shape
 
-    # Resize the segmentation and embeddings to be of the same size.
-
-    # We first resize the embedding, to an intermediate shape (passed as parameter).
-    # The motivation for this is to avoid loosing smaller segmented objects when resizing the segmentation
-    # to the original embedding shape. On the other hand, we avoid resizing the embeddings to the full segmentation
-    # shape for efficiency reasons.
+    # Resize embeddings to intermediate shape.
     resize_shape = tuple(min(rsh, sh) for rsh, sh in zip(resize_embedding_shape, shape)) + (embeddings.shape[-1],)
     embeddings = resize(embeddings, resize_shape, preserve_range=True).astype(embeddings.dtype)
 
@@ -45,14 +45,19 @@ def _compute_object_features_impl(embeddings, segmentation, resize_embedding_sha
         segmentation_rescaled, embeddings.shape[:2], order=0, anti_aliasing=False, preserve_range=True
     ).astype(segmentation.dtype)
 
-    # Which features do we use?
+    # Always include 'label' internally.
+    properties = tuple(properties) + ("label",)
+
+    # Compute regionprops features.
     all_features = regionprops_table(
-        segmentation_rescaled, intensity_image=embeddings, properties=("label", "area", "mean_intensity"),
+        segmentation_rescaled, intensity_image=embeddings, properties=properties,
     )
+
     seg_ids = all_features["label"]
-    features = pd.DataFrame(all_features)[
-        ["area"] + [f"mean_intensity-{i}" for i in range(embeddings.shape[-1])]
-    ].values
+
+    # Select only the requested features.
+    df_features = pd.DataFrame(all_features)
+    features = df_features.drop(columns=["label"]).values
 
     return seg_ids, features
 
@@ -111,6 +116,7 @@ def compute_object_features(
     segmentation: np.ndarray,
     resize_embedding_shape: Tuple[int, int] = (256, 256),
     verbose: bool = True,
+    properties: List[str] = ["area", "mean_intensity"]
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Compute object features based on SAM embeddings.
 
@@ -119,6 +125,7 @@ def compute_object_features(
         segmentation: The segmentation for which to compute the features.
         resize_embedding_shape: Shape for intermediate resizing of the embeddings.
         verbose: Whether to print a progressbar for the computation.
+        properties: The properties to compute for each object.
 
     Returns:
         The segmentation ids.
@@ -130,7 +137,7 @@ def compute_object_features(
     # If we have simple embeddings, i.e. 2d without tiling, then we can directly compute the features.
     if not is_tiled and not is_3d:
         embeddings = image_embeddings["features"].squeeze()
-        return _compute_object_features_impl(embeddings, segmentation, resize_embedding_shape)
+        return _compute_object_features_impl(embeddings, segmentation, resize_embedding_shape, properties)
 
     # Otherwise, we compute the features by iterating over slices and/or tiles,
     # compute the features for each slice / tile and accumulate them.
@@ -154,7 +161,7 @@ def compute_object_features(
         seg_embed_generator(), total=n_gen, disable=not verbose, desc="Compute object features"
     ):
         # Compute this seg ids and features.
-        this_seg_ids, this_features = _compute_object_features_impl(embeds, seg, resize_embedding_shape)
+        this_seg_ids, this_features = _compute_object_features_impl(embeds, seg, resize_embedding_shape, properties)
         this_seg_ids = this_seg_ids.tolist()
 
         # Find which of the seg ids are new (= processed for the first time).

@@ -46,7 +46,7 @@ def _accumulate_labels(segmentation, annotations):
     return all_features["majority_label"].astype("int")
 
 
-def _train_rf(features, labels, previous_features=None, previous_labels=None, **rf_kwargs):
+def _train_rf(features, labels, previous_features=None, previous_labels=None, grid_search=False, **rf_kwargs):
     assert len(features) == len(labels)
     valid = labels != 0
     X, y = features[valid], labels[valid]
@@ -56,9 +56,24 @@ def _train_rf(features, labels, previous_features=None, previous_labels=None, **
         X = np.concatenate([previous_features, X], axis=0)
         y = np.concatenate([previous_labels, y], axis=0)
 
-    rf = RandomForestClassifier(**rf_kwargs)
-    rf.fit(X, y)
-    return rf
+    if grid_search is True:
+        from sklearn.model_selection import GridSearchCV
+        param_grid = {
+            'n_estimators': [100, 150, 200, 500],
+            'max_depth': [None, 10, 20, 30]
+        }
+        rf = RandomForestClassifier(**rf_kwargs)
+        grid_search = GridSearchCV(estimator=rf, param_grid=param_grid, scoring='accuracy', cv=5, n_jobs=-1, verbose=2,)
+        grid_search.fit(X, y)
+        print("Best parameters found: ", grid_search.best_params_)
+        print("Best cross-validation score: ", grid_search.best_score_)
+        rf_final = RandomForestClassifier(**grid_search.best_params_, **rf_kwargs)
+        rf_final.fit(X, y)
+        return rf_final
+    else:
+        rf = RandomForestClassifier(**rf_kwargs)
+        rf.fit(X, y)
+        return rf
 
 
 # TODO do we add a shortcut?
