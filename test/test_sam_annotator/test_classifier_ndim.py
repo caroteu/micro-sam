@@ -120,3 +120,56 @@ def test_object_classifier_toggles_segmentation(make_napari_viewer_proxy):
     toggle(viewer)
     assert segmentation.visible
     viewer.close()
+
+
+@pytest.mark.gui
+@pytest.mark.skipif(platform.system() in ("Windows",), reason="Gui test is not working on windows.")
+def test_object_classifier_highlights_uncertain_objects(make_napari_viewer_proxy):
+    state = AnnotatorState()
+    state.image_shape, state.ndim = (64, 64), 2
+
+    # 16 square objects. The only feature is the object id, so the classes are split along the ids.
+    segmentation = np.zeros((64, 64), dtype="uint32")
+    for i in range(16):
+        row, col = divmod(i, 4)
+        segmentation[16 * row:16 * row + 8, 16 * col:16 * col + 8] = i + 1
+
+    viewer = make_napari_viewer_proxy()
+    viewer.add_labels(segmentation, name="segmentation")
+    annotator = ObjectClassifier(viewer)
+    annotator._update_image()
+    seg_ids = np.arange(1, 17)
+    state.object_features, state.seg_ids = seg_ids[:, None].astype("float32"), seg_ids
+
+    # Annotate the objects 1 and 2 with class 1, and the objects 15 and 16 with class 2.
+    annotations = np.zeros_like(segmentation)
+    annotations[2:4, 2:4], annotations[2:4, 18:20] = 1, 1
+    annotations[50:52, 34:36], annotations[50:52, 50:52] = 2, 2
+    viewer.layers["annotations"].data = annotations
+
+    # Off by default.
+    annotator._run_train_and_predict()
+    assert "uncertain objects" not in viewer.layers
+
+    # Switching it on highlights the requested number of unannotated objects for the current classifier.
+    annotator._highlight_uncertain.value = True
+    annotator._n_uncertain.value = 3
+    layer = viewer.layers["uncertain objects"]
+    assert len(layer.data) == 3
+    np.testing.assert_array_equal(layer.features["rank"], [1, 2, 3])
+    highlighted = segmentation[tuple(np.round(layer.data).astype(int).T)]
+    assert not np.isin(highlighted, [0, 1, 2, 15, 16]).any()
+    assert viewer.layers.selection.active is viewer.layers["annotations"]
+
+    # Training again updates the highlight. Clearing the annotations and switching it off remove it.
+    annotator._n_uncertain.value = 5
+    annotator._run_train_and_predict()
+    assert len(viewer.layers["uncertain objects"].data) == 5
+    annotator._clear_annotations()
+    assert "uncertain objects" not in viewer.layers
+    viewer.layers["annotations"].data = annotations
+    annotator._run_train_and_predict()
+    assert "uncertain objects" in viewer.layers
+    annotator._highlight_uncertain.value = False
+    assert "uncertain objects" not in viewer.layers
+    viewer.close()

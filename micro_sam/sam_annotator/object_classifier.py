@@ -3,6 +3,7 @@ from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import imageio.v3 as imageio
+from scipy import ndimage
 from skimage.measure import regionprops_table
 
 from sklearn.decomposition import PCA
@@ -14,7 +15,8 @@ import torch
 
 import napari
 from qtpy import QtWidgets
-from magicgui.widgets import ComboBox
+from magicgui.widgets import CheckBox, ComboBox, Container, Label, SpinBox
+from napari.utils.notifications import show_info
 
 from .. import util
 from ._batch import run_batch
@@ -27,12 +29,15 @@ from ._annotator import _ClassifierBase
 from .util import _sync_embedding_widget
 from ._batch_classification import ClassificationBatchTask
 from ..classical_features import OBJECT_FEATURES
-from ..object_classification import compute_object_features, project_prediction_to_segmentation
+from ..object_classification import (
+    compute_object_features, project_prediction_to_segmentation, select_uncertain_objects,
+)
 
 # Object features are the object area plus the per-channel mean of the 256-channel SAM/SAM2 image
 # embedding, i.e. 257 features. PCA can reduce to at most this many components.
 N_OBJECT_FEATURES = 257
 INTERNAL_LABEL_LAYER_NAMES = {"annotations", "prediction"}
+UNCERTAIN_LAYER_NAME = "uncertain objects"
 
 
 def _accumulate_labels(segmentation, annotations):
@@ -205,8 +210,88 @@ class ObjectClassifier(_ClassifierBase):
 
         return segmentation_selection
 
+    #
+    # Highlight the objects to annotate next (object classifier only).
+    #
+
+    def _create_uncertainty_section(self):
+        # Optionally highlight the objects with the smallest uncertainty margin after each prediction.
+        tooltip = get_tooltip("classification", "n_uncertain")
+        highlight = CheckBox(value=False, text="Highlight uncertain objects")
+        highlight.native.setToolTip(get_tooltip("classification", "highlight_uncertain"))
+        n_objects = SpinBox(value=10, min=1, max=10000, step=1)
+        n_objects.native.setToolTip(tooltip)
+        n_label = Label(value="number of objects:")
+        n_label.native.setToolTip(tooltip)
+        n_row = Container(layout="horizontal", widgets=[n_label, n_objects], labels=False)
+        n_row.native.layout().setContentsMargins(0, 0, 0, 0)
+        n_row.native.layout().addStretch(1)
+        n_row.visible = False
+        highlight.changed.connect(lambda checked: setattr(n_row, "visible", checked))
+        highlight.changed.connect(self._refresh_uncertain_objects)
+        n_objects.changed.connect(self._refresh_uncertain_objects)
+        self._highlight_uncertain, self._n_uncertain = highlight, n_objects
+        return Container(widgets=[highlight, n_row], labels=False).native
+
+    def _remove_uncertain_objects(self):
+        if UNCERTAIN_LAYER_NAME in self._viewer.layers:
+            self._viewer.layers.remove(UNCERTAIN_LAYER_NAME)
+
+    def _refresh_uncertain_objects(self, *args):
+        # Update the highlight after a settings change. Uses only the cached features, so this never
+        # triggers a feature computation.
+        state = AnnotatorState()
+        rf = self._get_rf()
+        if rf is None or state.object_features is None:
+            return self._remove_uncertain_objects()
+        self._on_prediction(rf, state.object_features, state.seg_ids)
+
+    def _on_prediction(self, rf, features, seg_ids):
+        # Mark the not yet annotated objects with the smallest uncertainty margin with a numbered ring.
+        self._remove_uncertain_objects()
+        if not self._highlight_uncertain.value:
+            return
+        segmentation_layer = self._get_selected_segmentation_layer()
+        if segmentation_layer is None:
+            return
+        segmentation = segmentation_layer.data
+
+        # An object counts as annotated if it contains any annotation.
+        annotations = self._viewer.layers["annotations"].data
+        annotated = np.isin(seg_ids, segmentation[annotations != 0])
+        selected = select_uncertain_objects(rf.predict_proba(features), self._n_uncertain.value, annotated)
+        if len(selected) == 0:
+            return show_info("There are no unannotated objects to highlight.")
+
+        # Place each ring at the center of the object's bounding box and make it a bit larger than the object.
+        ids = seg_ids[selected]
+        boxes = ndimage.find_objects(segmentation, max_label=int(ids.max()))
+        boxes = [boxes[seg_id - 1] for seg_id in ids if boxes[seg_id - 1] is not None]
+        if not boxes:
+            return
+        centers = np.array([[(s.start + s.stop - 1) / 2 for s in box] for box in boxes])
+        sizes = np.array([1.5 * max(s.stop - s.start for s in box[-2:]) for box in boxes])
+
+        # The minimal canvas size keeps the rings visible when zoomed out, e.g. for a whole slide image.
+        self._viewer.add_points(
+            centers, name=UNCERTAIN_LAYER_NAME, size=sizes, symbol="ring", face_color="magenta", border_width=0,
+            canvas_size_limits=(24, 10000), scale=segmentation_layer.scale,
+            features={"rank": np.arange(1, len(centers) + 1)},
+            text={"string": "{rank}", "color": "magenta", "anchor": "upper_left", "size": 12},
+        )
+        # Keep painting on the annotations.
+        self._viewer.layers.selection.active = self._viewer.layers["annotations"]
+
+    def _update_image(self, segmentation_result=None):
+        super()._update_image(segmentation_result)
+        self._remove_uncertain_objects()
+
+    def _clear_annotations(self, apply_to_volume=True):
+        super()._clear_annotations(apply_to_volume)
+        self._remove_uncertain_objects()
+
     def _extra_classification_sections(self):
-        return [self._create_segmentation_layer_section()]
+        return [self._create_segmentation_layer_section(), self._create_uncertainty_section()]
 
 
 def object_classifier(

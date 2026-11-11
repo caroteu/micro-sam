@@ -50,8 +50,13 @@ def _anyup_object_resize(embeds_chw, image_region, target_hw, upsampler):
     return upsampled[0].permute(1, 2, 0).cpu().numpy().astype("float32")
 
 
+# Per-object statistics _compute_object_features_impl can pool, in output column order.
+OBJECT_STATISTICS = ("area", "mean", "std")
+
+
 def _compute_object_features_impl(
     embeddings, segmentation, resize_embedding_shape, image_region=None, upsampler=None, pbar_update=None,
+    statistics=("area", "mean"),
 ):
     # Keep the raw (C, h, w) embedding for AnyUp, which needs the channel axis first.
     embeddings_chw = embeddings
@@ -99,14 +104,25 @@ def _compute_object_features_impl(
         segmentation_rescaled, embeddings.shape[:2], order=0, anti_aliasing=False, preserve_range=True
     ).astype(segmentation.dtype)
 
-    # Which features do we use?
+    # Which features do we use? 'statistics' picks any of area, per-channel mean and per-channel std.
+    # The columns always follow the OBJECT_STATISTICS order, so the default is [area, mean...].
+    unknown = set(statistics) - set(OBJECT_STATISTICS)
+    if unknown or not statistics:
+        raise ValueError(f"statistics must be a non-empty subset of {OBJECT_STATISTICS}, got {statistics}")
+    regionprops_names = {"area": "area", "mean": "intensity_mean", "std": "intensity_std"}
+    used = [stat for stat in OBJECT_STATISTICS if stat in statistics]
     all_features = regionprops_table(
-        segmentation_rescaled, intensity_image=embeddings, properties=("label", "area", "mean_intensity"),
+        segmentation_rescaled, intensity_image=embeddings,
+        properties=["label"] + [regionprops_names[stat] for stat in used],
     )
     seg_ids = all_features["label"]
-    features = pd.DataFrame(all_features)[
-        ["area"] + [f"mean_intensity-{i}" for i in range(embeddings.shape[-1])]
-    ].values
+    columns = []
+    for stat in used:
+        if stat == "area":
+            columns.append("area")
+        else:
+            columns += [f"{regionprops_names[stat]}-{i}" for i in range(embeddings.shape[-1])]
+    features = pd.DataFrame(all_features)[columns].values
 
     if pbar_update is not None:
         pbar_update(1)
@@ -339,6 +355,30 @@ def project_prediction_to_segmentation(
     missing_ids = np.setdiff1d(np.unique(segmentation), seg_ids)
     prediction.update({missing_id: 0 for missing_id in missing_ids})
     return take_dict(prediction, segmentation_for_relabeling)
+
+
+def select_uncertain_objects(
+    probabilities: np.ndarray, n_objects: int, annotated: Optional[np.ndarray] = None,
+) -> np.ndarray:
+    """Select the objects with the smallest uncertainty margin, i.e. the objects to annotate next.
+
+    The uncertainty margin of an object is the difference between the probabilities of the two most
+    likely classes. A small margin means that the classifier cannot decide between these classes.
+
+    Args:
+        probabilities: The class probabilities of the objects, e.g. from `predict_proba` of a random forest.
+        n_objects: The number of objects to select.
+        annotated: Optional mask of the objects that are already annotated. These are not selected.
+
+    Returns:
+        The indices of the selected objects, sorted from the most to the least uncertain.
+    """
+    top = np.sort(probabilities, axis=1)[:, ::-1]
+    margin = top[:, 0] - top[:, 1] if top.shape[1] > 1 else top[:, 0].copy()
+    if annotated is not None:
+        margin[annotated] = np.inf
+    order = np.argsort(margin, kind="stable")[:n_objects]
+    return order[np.isfinite(margin[order])]
 
 
 # TODO handle images / segmentations as file paths

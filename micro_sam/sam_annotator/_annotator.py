@@ -466,6 +466,10 @@ class _ClassifierBase(QtWidgets.QScrollArea):
         """Extra widgets/layouts shown above the settings dropdown (e.g. the segmentation selector)."""
         return []
 
+    def _on_prediction(self, rf, features, aux):
+        """Called after a prediction is shown (e.g. to highlight objects to annotate next)."""
+        pass
+
     #
     # Shared state accessors and helpers.
     #
@@ -1222,6 +1226,7 @@ class _ClassifierBase(QtWidgets.QScrollArea):
             layer.data = data
         # Each predicted class gets a class row, e.g. a class whose annotations were restored with napari's redo.
         self._ensure_classes(rf.classes_)
+        self._on_prediction(rf, features, aux)
 
     def _clear_annotations(self, apply_to_volume=True):
         # Remove the annotation scribbles and the prediction: the whole volume, or only the current
